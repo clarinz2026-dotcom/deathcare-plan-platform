@@ -4,7 +4,7 @@ import { api } from "@/convex/_generated/api";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -23,14 +23,52 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Search, Plus, Users, ArrowRight } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+
+const STATUS_LABELS: Record<string, string> = {
+  current: "Current",
+  delinquent_30: "30 Days Late",
+  delinquent_60: "60 Days Late",
+  delinquent_90: "90 Days Late",
+  lapsed: "Lapsed",
+  fully_paid: "Fully Paid",
+  assigned_death_claim: "Death Claim",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  current: "terminal-status-current",
+  delinquent_30: "terminal-status-delinquent",
+  delinquent_60: "terminal-status-delinquent",
+  delinquent_90: "terminal-status-claim",
+  lapsed: "terminal-status-claim",
+  fully_paid: "terminal-status-paid",
+  assigned_death_claim: "terminal-status-claim",
+};
+
+const FILTER_TABS = [
+  { key: "all", label: "All" },
+  { key: "current", label: "Current" },
+  { key: "delinquent_30", label: "30 Days Late" },
+  { key: "delinquent_60", label: "60 Days Late" },
+  { key: "delinquent_90", label: "90 Days Late" },
+  { key: "lapsed", label: "Lapsed" },
+  { key: "fully_paid", label: "Fully Paid" },
+  { key: "assigned_death_claim", label: "Death Claim" },
+];
+
+function formatPHP(amount: number) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
 
 export default function Clients() {
-  const { user } = useAuth();
   const clients = useQuery(api.clients.list, {});
   const contracts = useQuery(api.contracts.list, {});
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Form state
@@ -54,20 +92,56 @@ export default function Clients() {
 
   const createClient = useMutation(api.clients.create);
 
+  // Build a map of clientId -> contract (prefer the first/active contract)
+  const clientContracts = contracts
+    ? (() => {
+        const map: Record<string, typeof contracts[number]> = {};
+        for (const c of contracts) {
+          if (!map[c.clientId]) {
+            map[c.clientId] = c;
+          } else {
+            // Keep the non-fully-paid one if both exist
+            const existing = map[c.clientId];
+            if (
+              existing.contractStatus === "fully_paid" &&
+              c.contractStatus !== "fully_paid"
+            ) {
+              map[c.clientId] = c;
+            }
+          }
+        }
+        return map;
+      })()
+    : {};
+
+  // Filter clients by search and status
   const filteredClients = clients?.filter((c) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      c.lastName.toLowerCase().includes(q) ||
-      c.firstName.toLowerCase().includes(q) ||
-      c.contactNumber.includes(q)
-    );
+    // Search filter
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesSearch =
+        c.lastName.toLowerCase().includes(q) ||
+        c.firstName.toLowerCase().includes(q) ||
+        c.contactNumber.includes(q);
+      if (!matchesSearch) return false;
+    }
+    // Status filter
+    if (statusFilter !== "all") {
+      const contract = clientContracts[c._id];
+      if (!contract) return false;
+      if (contract.contractStatus !== statusFilter) return false;
+    }
+    return true;
   });
 
-  // Map client to their contract status
-  const clientContracts = contracts
-    ? Object.fromEntries(contracts.map((c) => [c.clientId, c]))
-    : {};
+  // Count clients per status for badge counts
+  const statusCounts: Record<string, number> = {};
+  if (contracts) {
+    for (const c of contracts) {
+      statusCounts[c.contractStatus] = (statusCounts[c.contractStatus] || 0) + 1;
+    }
+  }
+  const clientCount = clients?.length || 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +187,7 @@ export default function Clients() {
             <span className="text-terminal-green">&gt;</span> Clients
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            {clients?.length || 0} total client{(clients?.length || 0) !== 1 && "s"}
+            {clientCount} total client{clientCount !== 1 && "s"}
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -301,15 +375,46 @@ export default function Clients() {
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name or contact..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 font-mono text-sm"
-        />
+      {/* Search + Status filters */}
+      <div className="space-y-3">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or contact..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 font-mono text-sm"
+          />
+        </div>
+
+        {/* Status filter tabs */}
+        <div className="flex flex-wrap gap-1.5">
+          {FILTER_TABS.map((tab) => {
+            const count =
+              tab.key === "all"
+                ? clientCount
+                : statusCounts[tab.key] || 0;
+            return (
+              <Button
+                key={tab.key}
+                variant={statusFilter === tab.key ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs font-mono gap-1.5"
+                onClick={() => setStatusFilter(tab.key)}
+              >
+                {tab.label}
+                {count > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 min-w-4 px-1 text-[9px] font-mono"
+                  >
+                    {count}
+                  </Badge>
+                )}
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Client table */}
@@ -347,7 +452,9 @@ export default function Clients() {
                   <TableCell colSpan={5} className="text-center py-8">
                     <Users className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
                     <p className="text-sm text-muted-foreground font-mono">
-                      {search ? "No clients match your search" : "No clients yet. Add one to get started."}
+                      {search || statusFilter !== "all"
+                        ? "No clients match your filters"
+                        : "No clients yet. Add one to get started."}
                     </p>
                   </TableCell>
                 </TableRow>
@@ -381,18 +488,10 @@ export default function Clients() {
                           <Badge
                             variant="outline"
                             className={`text-[10px] font-mono ${
-                              contract.contractStatus === "current"
-                                ? "terminal-status-current"
-                                : contract.contractStatus === "fully_paid"
-                                  ? "terminal-status-paid"
-                                  : contract.contractStatus.startsWith("delinquent")
-                                    ? "terminal-status-delinquent"
-                                    : contract.contractStatus === "lapsed"
-                                      ? "terminal-status-lapsed"
-                                      : "terminal-status-claim"
+                              STATUS_COLORS[contract.contractStatus] || ""
                             }`}
                           >
-                            {contract.contractStatus.replace(/_/g, " ")}
+                            {STATUS_LABELS[contract.contractStatus] || contract.contractStatus.replace(/_/g, " ")}
                           </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground font-mono">
@@ -405,7 +504,7 @@ export default function Clients() {
                           <div>
                             <p className="text-xs">{contract.planType}</p>
                             <p className="text-[11px] text-muted-foreground font-mono">
-                              ₱{contract.monthlyAmortization.toLocaleString()}/mo
+                              {formatPHP(contract.monthlyAmortization)}/mo
                             </p>
                           </div>
                         ) : (
