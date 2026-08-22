@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, FileText, CreditCard, Plus } from "lucide-react";
+import { ArrowLeft, FileText, CreditCard, Plus, Download } from "lucide-react";
 import { format } from "date-fns";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,9 +36,12 @@ function formatPHP(amount: number) {
   }).format(amount);
 }
 
+import { generateSOAPDF } from "@/lib/generateSOA";
+
 export default function ClientDetail() {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
+  const [downloadingSOA, setDownloadingSOA] = useState(false);
   const client = useQuery(
     api.clients.get,
     clientId ? { clientId: clientId as any } : "skip"
@@ -100,6 +103,56 @@ export default function ClientDetail() {
     });
   };
 
+  const handleDownloadSOA = useCallback(async () => {
+    if (!client) return;
+    setDownloadingSOA(true);
+    try {
+      const clientName = client.middleName
+        ? `${client.lastName}, ${client.firstName} ${client.middleName}`
+        : `${client.lastName}, ${client.firstName}`;
+
+      const soaContracts = (contracts || []).map((c) => ({
+        contractNumber: c.contractNumber,
+        planType: c.planType,
+        planAmount: c.planAmount,
+        monthlyAmortization: c.monthlyAmortization,
+        totalPaid: c.totalPaid,
+        contractStatus: c.contractStatus,
+        startDate: c.startDate,
+      }));
+
+      const soaPayments = (payments || []).map((p) => ({
+        paymentDate: p.paymentDate,
+        amount: p.amount,
+        paymentChannel: p.paymentChannel,
+        orNumber: p.orNumber,
+        contractNumber: p.contract?.contractNumber || "—",
+        remarks: p.remarks,
+      }));
+
+      await generateSOAPDF({
+        clientName,
+        clientAddress: `${client.address}, ${client.city}, ${client.province}`,
+        clientContact: client.contactNumber,
+        clientEmail: client.email || undefined,
+        beneficiaryName: client.beneficiaryName,
+        beneficiaryRelationship: client.beneficiaryRelationship,
+        contracts: soaContracts,
+        payments: soaPayments,
+        generatedDate: new Date().toLocaleDateString("en-PH", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        accountNumber: clientId || "—",
+      });
+    } catch (error) {
+      console.error("Failed to generate SOA PDF:", error);
+    } finally {
+      setDownloadingSOA(false);
+    }
+  }, [client, contracts, payments, clientId]);
+
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
@@ -117,6 +170,16 @@ export default function ClientDetail() {
             {client.contactNumber} · {client.city}, {client.province}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 font-mono"
+          onClick={handleDownloadSOA}
+          disabled={downloadingSOA}
+        >
+          <Download className="h-4 w-4" />
+          {downloadingSOA ? "Generating..." : "SOA"}
+        </Button>
       </div>
 
       {/* Client info cards */}
