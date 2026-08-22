@@ -1,0 +1,119 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+
+/**
+ * List all clients with optional search.
+ */
+export const list = query({
+  args: {
+    search: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const search = args.search?.toLowerCase().trim();
+
+    let clients;
+    if (search) {
+      // Search by last name
+      clients = await ctx.db
+        .query("clients")
+        .withIndex("by_lastName")
+        .collect();
+      clients = clients.filter(
+        (c) =>
+          c.lastName.toLowerCase().includes(search) ||
+          c.firstName.toLowerCase().includes(search) ||
+          c.contactNumber.includes(search)
+      );
+    } else {
+      clients = await ctx.db
+        .query("clients")
+        .withIndex("by_createdAt")
+        .order("desc")
+        .collect();
+    }
+
+    return clients;
+  },
+});
+
+/**
+ * Get a single client by ID.
+ */
+export const get = query({
+  args: { clientId: v.id("clients") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.clientId);
+  },
+});
+
+/**
+ * Create a new client.
+ */
+export const create = mutation({
+  args: {
+    firstName: v.string(),
+    lastName: v.string(),
+    middleName: v.optional(v.string()),
+    dateOfBirth: v.number(),
+    gender: v.union(v.literal("male"), v.literal("female"), v.literal("other")),
+    contactNumber: v.string(),
+    email: v.optional(v.string()),
+    address: v.string(),
+    city: v.string(),
+    province: v.string(),
+    zipCode: v.string(),
+    occupation: v.optional(v.string()),
+    beneficiaryName: v.string(),
+    beneficiaryRelationship: v.string(),
+    beneficiaryContact: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    return await ctx.db.insert("clients", {
+      ...args,
+      createdAt: Date.now(),
+      createdBy: userId,
+    });
+  },
+});
+
+/**
+ * Update an existing client.
+ */
+export const update = mutation({
+  args: {
+    clientId: v.id("clients"),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    middleName: v.optional(v.string()),
+    dateOfBirth: v.optional(v.number()),
+    gender: v.optional(
+      v.union(v.literal("male"), v.literal("female"), v.literal("other"))
+    ),
+    contactNumber: v.optional(v.string()),
+    email: v.optional(v.string()),
+    address: v.optional(v.string()),
+    city: v.optional(v.string()),
+    province: v.optional(v.string()),
+    zipCode: v.optional(v.string()),
+    occupation: v.optional(v.string()),
+    beneficiaryName: v.optional(v.string()),
+    beneficiaryRelationship: v.optional(v.string()),
+    beneficiaryContact: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { clientId, ...updates } = args;
+    // Remove undefined values
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined)
+    );
+    if (Object.keys(cleanUpdates).length === 0) return;
+
+    await ctx.db.patch(clientId, cleanUpdates);
+  },
+});
