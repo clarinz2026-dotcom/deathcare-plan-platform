@@ -25,6 +25,7 @@ import {
 import { CreditCard, Plus, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { ScrollableTable } from "@/components/ScrollableTable";
 
 function formatPHP(amount: number) {
   return new Intl.NumberFormat("en-PH", {
@@ -99,7 +100,7 @@ export default function Payments() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -114,10 +115,11 @@ export default function Payments() {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
               <Plus className="h-4 w-4" />
-              Record Payment
+              <span className="hidden sm:inline">Record Payment</span>
+              <span className="sm:hidden">Record</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto mx-2 sm:mx-0">
             <DialogHeader>
               <DialogTitle className="font-mono">
                 <span className="text-terminal-green">$</span> Record Payment
@@ -261,6 +263,7 @@ export default function Payments() {
       {/* Payment table */}
       <Card className="border-border/60 shadow-none">
         <CardContent className="p-0">
+          <ScrollableTable>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -337,6 +340,7 @@ export default function Payments() {
               )}
             </TableBody>
           </Table>
+          </ScrollableTable>
         </CardContent>
       </Card>
     </div>

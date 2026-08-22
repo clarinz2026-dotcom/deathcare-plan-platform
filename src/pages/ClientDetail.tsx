@@ -101,9 +101,9 @@ export default function ClientDetail() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4">
         <Button
           variant="ghost"
           size="icon"
@@ -120,7 +120,7 @@ export default function ClientDetail() {
       </div>
 
       {/* Client info cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         {/* Personal */}
         <Card className="border-border/60 shadow-none">
           <CardHeader className="pb-3">

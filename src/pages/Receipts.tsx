@@ -3,6 +3,7 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Receipt as ReceiptIcon, Printer } from "lucide-react";
+import { ScrollableTable } from "@/components/ScrollableTable";
 import {
   Table,
   TableBody,
@@ -42,7 +43,7 @@ export default function Receipts() {
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
@@ -56,6 +57,7 @@ export default function Receipts() {
       {/* Receipt table */}
       <Card className="border-border/60 shadow-none">
         <CardContent className="p-0">
+          <ScrollableTable>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -146,6 +148,7 @@ export default function Receipts() {
               )}
             </TableBody>
           </Table>
+          </ScrollableTable>
         </CardContent>
       </Card>
 
@@ -154,7 +157,7 @@ export default function Receipts() {
         open={!!selectedReceipt}
         onOpenChange={(open) => !open && setSelectedReceipt(null)}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md mx-2 sm:mx-0 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-mono text-sm">
               Official Receipt

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Search, Plus, Users, ArrowRight } from "lucide-react";
+import { ScrollableTable } from "@/components/ScrollableTable";
 
 const STATUS_LABELS: Record<string, string> = {
   current: "Current",
@@ -156,7 +157,7 @@ export default function Clients() {
     "font-mono text-sm bg-background border-border h-9 focus-visible:ring-terminal-green";
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -171,10 +172,11 @@ export default function Clients() {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
               <Plus className="h-4 w-4" />
-              New Client
+              <span className="hidden sm:inline">New Client</span>
+              <span className="sm:hidden">New</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto mx-2 sm:mx-0">
             <DialogHeader>
               <DialogTitle className="font-mono">
                 <span className="text-terminal-green">$</span> Add New Client
@@ -397,6 +399,7 @@ export default function Clients() {
       {/* Client table */}
       <Card className="border-border/60 shadow-none">
         <CardContent className="p-0">
+          <ScrollableTable>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -499,6 +502,7 @@ export default function Clients() {
               )}
             </TableBody>
           </Table>
+          </ScrollableTable>
         </CardContent>
       </Card>
     </div>
