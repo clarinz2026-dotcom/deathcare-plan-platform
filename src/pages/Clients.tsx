@@ -32,6 +32,7 @@ const STATUS_LABELS: Record<string, string> = {
   lapsed: "Lapsed",
   fully_paid: "Fully Paid",
   assigned_death_claim: "Death Claim",
+  no_contract: "No Contract",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -42,6 +43,7 @@ const STATUS_COLORS: Record<string, string> = {
   lapsed: "terminal-status-claim",
   fully_paid: "terminal-status-paid",
   assigned_death_claim: "terminal-status-claim",
+  no_contract: "text-muted-foreground",
 };
 
 const FILTER_TABS = [
@@ -64,8 +66,7 @@ function formatPHP(amount: number) {
 }
 
 export default function Clients() {
-  const clients = useQuery(api.clients.list, {});
-  const contracts = useQuery(api.contracts.list, {});
+  const clientsWithStatus = useQuery(api.clients.listWithStatus, {});
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -92,56 +93,32 @@ export default function Clients() {
 
   const createClient = useMutation(api.clients.create);
 
-  // Build a map of clientId -> contract (prefer the first/active contract)
-  const clientContracts = contracts
-    ? (() => {
-        const map: Record<string, typeof contracts[number]> = {};
-        for (const c of contracts) {
-          if (!map[c.clientId]) {
-            map[c.clientId] = c;
-          } else {
-            // Keep the non-fully-paid one if both exist
-            const existing = map[c.clientId];
-            if (
-              existing.contractStatus === "fully_paid" &&
-              c.contractStatus !== "fully_paid"
-            ) {
-              map[c.clientId] = c;
-            }
-          }
-        }
-        return map;
-      })()
-    : {};
-
-  // Filter clients by search and status
-  const filteredClients = clients?.filter((c) => {
+  // Filter clients by search and computed status
+  const filteredClients = clientsWithStatus?.filter((item) => {
     // Search filter
     if (search) {
       const q = search.toLowerCase();
       const matchesSearch =
-        c.lastName.toLowerCase().includes(q) ||
-        c.firstName.toLowerCase().includes(q) ||
-        c.contactNumber.includes(q);
+        item.client.lastName.toLowerCase().includes(q) ||
+        item.client.firstName.toLowerCase().includes(q) ||
+        item.client.contactNumber.includes(q);
       if (!matchesSearch) return false;
     }
     // Status filter
     if (statusFilter !== "all") {
-      const contract = clientContracts[c._id];
-      if (!contract) return false;
-      if (contract.contractStatus !== statusFilter) return false;
+      if (item.computedStatus !== statusFilter) return false;
     }
     return true;
   });
 
-  // Count clients per status for badge counts
+  // Count clients per computed status for badge counts
   const statusCounts: Record<string, number> = {};
-  if (contracts) {
-    for (const c of contracts) {
-      statusCounts[c.contractStatus] = (statusCounts[c.contractStatus] || 0) + 1;
+  if (clientsWithStatus) {
+    for (const item of clientsWithStatus) {
+      statusCounts[item.computedStatus] = (statusCounts[item.computedStatus] || 0) + 1;
     }
   }
-  const clientCount = clients?.length || 0;
+  const clientCount = clientsWithStatus?.length || 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -459,8 +436,7 @@ export default function Clients() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClients.map((client) => {
-                  const contract = clientContracts[client._id];
+                filteredClients.map(({ client, contract, computedStatus, daysSincePayment }) => {
                   return (
                     <TableRow
                       key={client._id}
@@ -484,20 +460,21 @@ export default function Clients() {
                         </p>
                       </TableCell>
                       <TableCell>
-                        {contract ? (
+                        <div className="space-y-1">
                           <Badge
                             variant="outline"
                             className={`text-[10px] font-mono ${
-                              STATUS_COLORS[contract.contractStatus] || ""
+                              STATUS_COLORS[computedStatus] || ""
                             }`}
                           >
-                            {STATUS_LABELS[contract.contractStatus] || contract.contractStatus.replace(/_/g, " ")}
+                            {STATUS_LABELS[computedStatus] || computedStatus.replace(/_/g, " ")}
                           </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground font-mono">
-                            No contract
-                          </span>
-                        )}
+                          {daysSincePayment !== null && computedStatus !== "no_contract" && (
+                            <p className="text-[10px] text-muted-foreground">
+                              {daysSincePayment}d since last payment
+                            </p>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {contract ? (

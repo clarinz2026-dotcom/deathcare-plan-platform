@@ -3,6 +3,38 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 /**
+ * Compute delinquency status based on days since last payment.
+ */
+function computeDelinquencyStatus(
+  contractStatus: string,
+  lastPaymentDate: number | null,
+  totalPaid: number,
+  planAmount: number,
+  contractStartDate: number
+): string {
+  // If fully paid or death claim, keep stored status
+  if (contractStatus === "fully_paid" || contractStatus === "assigned_death_claim") {
+    return contractStatus;
+  }
+
+  // If totalPaid >= planAmount, it's fully paid
+  if (totalPaid >= planAmount) {
+    return "fully_paid";
+  }
+
+  // Determine reference date: last payment or contract start
+  const referenceDate = lastPaymentDate ?? contractStartDate;
+  const now = Date.now();
+  const daysSince = Math.floor((now - referenceDate) / (1000 * 60 * 60 * 24));
+
+  if (daysSince > 120) return "lapsed";
+  if (daysSince > 90) return "delinquent_90";
+  if (daysSince > 60) return "delinquent_60";
+  if (daysSince > 30) return "delinquent_30";
+  return "current";
+}
+
+/**
  * List all clients with optional search.
  */
 export const list = query({
@@ -115,5 +147,80 @@ export const update = mutation({
     if (Object.keys(cleanUpdates).length === 0) return;
 
     await ctx.db.patch(clientId, cleanUpdates);
+  },
+});
+
+/**
+ * List clients with computed delinquency status based on actual payment dates.
+ * Returns each client with their active contract and computed status.
+ */
+export const listWithStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const clients = await ctx.db
+      .query("clients")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .collect();
+
+    const now = Date.now();
+    const results = [];
+
+    for (const client of clients) {
+      // Get all contracts for this client
+      const contracts = await ctx.db
+        .query("contracts")
+        .withIndex("by_client", (q) => q.eq("clientId", client._id))
+        .collect();
+
+      // Pick the best active contract (prefer non-fully-paid)
+      let activeContract = contracts.find(
+        (c) => c.contractStatus !== "fully_paid" && c.contractStatus !== "assigned_death_claim"
+      );
+      if (!activeContract && contracts.length > 0) {
+        activeContract = contracts[0];
+      }
+
+      if (!activeContract) {
+        results.push({
+          client,
+          contract: null,
+          computedStatus: "no_contract",
+          lastPaymentDate: null,
+          daysSincePayment: null,
+        });
+        continue;
+      }
+
+      // Find the most recent payment for this contract
+      const payments = await ctx.db
+        .query("payments")
+        .withIndex("by_contract", (q) => q.eq("contractId", activeContract!._id))
+        .order("desc")
+        .collect();
+
+      const lastPaymentDate = payments.length > 0 ? payments[0].paymentDate : null;
+      const daysSincePayment = lastPaymentDate
+        ? Math.floor((now - lastPaymentDate) / (1000 * 60 * 60 * 24))
+        : null;
+
+      const computedStatus = computeDelinquencyStatus(
+        activeContract.contractStatus,
+        lastPaymentDate,
+        activeContract.totalPaid,
+        activeContract.planAmount,
+        activeContract.startDate
+      );
+
+      results.push({
+        client,
+        contract: activeContract,
+        computedStatus,
+        lastPaymentDate,
+        daysSincePayment,
+      });
+    }
+
+    return results;
   },
 });
