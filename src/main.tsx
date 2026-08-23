@@ -19,6 +19,8 @@ const ClientDetail = lazy(() => import("./pages/ClientDetail.tsx"));
 const Contracts = lazy(() => import("./pages/Contracts.tsx"));
 const Payments = lazy(() => import("./pages/Payments.tsx"));
 const Receipts = lazy(() => import("./pages/Receipts.tsx"));
+const Reports = lazy(() => import("./pages/Reports.tsx"));
+const AuditLog = lazy(() => import("./pages/AuditLog.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -185,6 +187,22 @@ createRoot(document.getElementById("root")!).render(
                 element={
                   <ProtectedRoute>
                     <Receipts />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <ProtectedRoute>
+                    <Reports />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/audit"
+                element={
+                  <ProtectedRoute>
+                    <AuditLog />
                   </ProtectedRoute>
                 }
               />

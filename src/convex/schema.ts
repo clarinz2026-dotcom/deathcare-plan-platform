@@ -140,6 +140,33 @@ const schema = defineSchema(
       .index("by_paymentDate", ["paymentDate"])
       .index("by_orNumber", ["orNumber"]),
 
+    // Audit log
+    audit_log: defineTable({
+      action: v.union(
+        v.literal("create"),
+        v.literal("update"),
+        v.literal("delete"),
+        v.literal("status_change"),
+      ),
+      entityType: v.union(
+        v.literal("client"),
+        v.literal("contract"),
+        v.literal("payment"),
+        v.literal("receipt"),
+      ),
+      entityId: v.string(),
+      userId: v.id("users"),
+      userName: v.optional(v.string()),
+      description: v.string(),
+      oldValues: v.optional(v.any()),
+      newValues: v.optional(v.any()),
+      timestamp: v.number(),
+    })
+      .index("by_entity", ["entityType", "entityId"])
+      .index("by_user", ["userId"])
+      .index("by_timestamp", ["timestamp"])
+      .index("by_action", ["action"]),
+
     // Receipts
     receipts: defineTable({
       paymentId: v.id("payments"),

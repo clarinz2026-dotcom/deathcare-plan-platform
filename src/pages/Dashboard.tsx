@@ -1,7 +1,8 @@
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Users,
   FileText,
@@ -10,8 +11,10 @@ import {
   AlertTriangle,
   Clock,
   Banknote,
+  RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useState } from "react";
 
 const STATUS_LABELS: Record<string, string> = {
   current: "Current",
@@ -45,6 +48,19 @@ export default function Dashboard() {
   const summary = useQuery(api.dashboard.summary);
   const recentPayments = useQuery(api.dashboard.recentPayments);
   const delinquent = useQuery(api.dashboard.delinquentContracts);
+  const updateDelinquency = useMutation(api.delinquency.updateAllContractStatuses);
+  const [updatingDelinquency, setUpdatingDelinquency] = useState(false);
+
+  const handleUpdateDelinquency = async () => {
+    setUpdatingDelinquency(true);
+    try {
+      await updateDelinquency();
+    } catch (error) {
+      console.error("Failed to update delinquency:", error);
+    } finally {
+      setUpdatingDelinquency(false);
+    }
+  };
 
   if (!summary) {
     return (
@@ -204,10 +220,22 @@ export default function Dashboard() {
           {/* Delinquent alerts */}
           <Card className="border-border/60 shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-terminal-amber" />
-                Delinquent
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-terminal-amber" />
+                  Delinquent
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs font-mono"
+                  onClick={handleUpdateDelinquency}
+                  disabled={updatingDelinquency}
+                >
+                  <RefreshCw className={`h-3 w-3 ${updatingDelinquency ? "animate-spin" : ""}`} />
+                  {updatingDelinquency ? "Updating..." : "Refresh"}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {!delinquent || delinquent.length === 0 ? (

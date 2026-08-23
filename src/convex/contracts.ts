@@ -2,6 +2,14 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+function formatPHP(amount: number) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
 const contractStatusValidator = v.union(
   v.literal("current"),
   v.literal("delinquent_30"),
@@ -85,13 +93,33 @@ export const create = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    return await ctx.db.insert("contracts", {
+    const contractId = await ctx.db.insert("contracts", {
       ...args,
       totalPaid: 0,
       contractStatus: "current",
       createdAt: Date.now(),
       createdBy: userId,
     });
+
+    // Log audit entry
+    const user = await ctx.db.get(userId);
+    await ctx.db.insert("audit_log", {
+      action: "create",
+      entityType: "contract",
+      entityId: contractId,
+      userId,
+      userName: user?.name || user?.email || "Unknown",
+      description: `Contract ${args.contractNumber} created for ${args.planType} (${formatPHP(args.planAmount)})`,
+      newValues: {
+        contractNumber: args.contractNumber,
+        planType: args.planType,
+        planAmount: args.planAmount,
+        monthlyAmortization: args.monthlyAmortization,
+      },
+      timestamp: Date.now(),
+    });
+
+    return contractId;
   },
 });
 
@@ -104,8 +132,30 @@ export const updateStatus = mutation({
     contractStatus: contractStatusValidator,
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const oldContract = await ctx.db.get(args.contractId);
+    const oldStatus = oldContract?.contractStatus;
+
     await ctx.db.patch(args.contractId, {
       contractStatus: args.contractStatus,
     });
+
+    // Log audit entry
+    if (oldStatus && oldStatus !== args.contractStatus) {
+      const user = await ctx.db.get(userId);
+      await ctx.db.insert("audit_log", {
+        action: "status_change",
+        entityType: "contract",
+        entityId: args.contractId,
+        userId,
+        userName: user?.name || user?.email || "Unknown",
+        description: `Contract status changed from "${oldStatus}" to "${args.contractStatus}"`,
+        oldValues: { contractStatus: oldStatus },
+        newValues: { contractStatus: args.contractStatus },
+        timestamp: Date.now(),
+      });
+    }
   },
 });

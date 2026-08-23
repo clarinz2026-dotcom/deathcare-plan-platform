@@ -2,6 +2,14 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+function formatPHP(amount: number) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
 const paymentChannelValidator = v.union(
   v.literal("cash"),
   v.literal("gcash"),
@@ -99,6 +107,25 @@ export const record = mutation({
       patch.contractStatus = "fully_paid";
     }
     await ctx.db.patch(args.contractId, patch);
+
+    // Log audit entry
+    const user = await ctx.db.get(userId);
+    await ctx.db.insert("audit_log", {
+      action: "create",
+      entityType: "payment",
+      entityId: paymentId,
+      userId,
+      userName: user?.name || user?.email || "Unknown",
+      description: `Payment of ${formatPHP(args.amount)} recorded for contract ${contract.contractNumber}`,
+      newValues: {
+        amount: args.amount,
+        paymentChannel: args.paymentChannel,
+        paymentDate: args.paymentDate,
+        contractNumber: contract.contractNumber,
+        newTotalPaid,
+      },
+      timestamp: Date.now(),
+    });
 
     // Generate receipt number: RCP-YYYYMMDD-XXXX
     const now = new Date(args.paymentDate);

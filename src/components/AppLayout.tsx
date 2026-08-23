@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Menu,
   X,
+  BarChart3,
+  History,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,8 @@ const NAV_ITEMS = [
   { to: "/contracts", icon: FileText, label: "Contracts", roles: ["ceo", "manager", "finance_staff"] },
   { to: "/payments", icon: CreditCard, label: "Payments", roles: ["ceo", "manager", "finance_staff", "cashier"] },
   { to: "/receipts", icon: Receipt, label: "Receipts", roles: ["ceo", "manager", "finance_staff", "cashier"] },
+  { to: "/reports", icon: BarChart3, label: "Reports", roles: ["ceo", "manager", "finance_staff"] },
+  { to: "/audit", icon: History, label: "Audit Log", roles: ["ceo", "manager"] },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
