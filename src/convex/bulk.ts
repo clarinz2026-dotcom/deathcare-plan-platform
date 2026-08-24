@@ -3,8 +3,8 @@ import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 
 /**
- * Bulk create clients from parsed data.
- * Expects an array of client objects with the required fields.
+ * Bulk create clients from parsed CSV/XLSX data.
+ * Accepts the original ClientRow format used by the frontend.
  */
 export const bulkCreateClients = mutation({
   args: {
@@ -13,7 +13,7 @@ export const bulkCreateClients = mutation({
         firstName: v.string(),
         lastName: v.string(),
         middleName: v.optional(v.string()),
-        dateOfBirth: v.string(), // ISO date string
+        dateOfBirth: v.string(),
         gender: v.union(v.literal("male"), v.literal("female"), v.literal("other")),
         contactNumber: v.string(),
         email: v.optional(v.string()),
@@ -40,19 +40,16 @@ export const bulkCreateClients = mutation({
       success: 0,
       failed: 0,
       errors: [] as Array<{ row: number; error: string }>,
-      created: [] as string[],
     };
 
     for (let i = 0; i < args.clients.length; i++) {
       const client = args.clients[i];
       try {
-        // Parse date of birth
         const dob = new Date(client.dateOfBirth);
         if (isNaN(dob.getTime())) {
           throw new Error(`Invalid date of birth: ${client.dateOfBirth}`);
         }
 
-        // Create client
         const clientId = await ctx.db.insert("clients", {
           firstName: client.firstName,
           lastName: client.lastName,
@@ -74,7 +71,6 @@ export const bulkCreateClients = mutation({
           createdBy: userId,
         });
 
-        // Log audit entry
         await ctx.db.insert("audit_log", {
           action: "create",
           entityType: "client",
@@ -92,7 +88,6 @@ export const bulkCreateClients = mutation({
         });
 
         results.success++;
-        results.created.push(clientId);
       } catch (error) {
         results.failed++;
         results.errors.push({
@@ -102,7 +97,6 @@ export const bulkCreateClients = mutation({
       }
     }
 
-    // Log bulk upload summary
     await ctx.db.insert("audit_log", {
       action: "create",
       entityType: "client",
