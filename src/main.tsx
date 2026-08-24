@@ -21,6 +21,7 @@ const Payments = lazy(() => import("./pages/Payments.tsx"));
 const Receipts = lazy(() => import("./pages/Receipts.tsx"));
 const Reports = lazy(() => import("./pages/Reports.tsx"));
 const AuditLog = lazy(() => import("./pages/AuditLog.tsx"));
+const BulkUpload = lazy(() => import("./pages/BulkUpload.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -203,6 +204,14 @@ createRoot(document.getElementById("root")!).render(
                 element={
                   <ProtectedRoute>
                     <AuditLog />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bulk-upload"
+                element={
+                  <ProtectedRoute>
+                    <BulkUpload />
                   </ProtectedRoute>
                 }
               />
