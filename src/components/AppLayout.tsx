@@ -16,6 +16,8 @@ import {
   BarChart3,
   History,
   Upload,
+  MapPin,
+  Navigation,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,8 @@ const NAV_ITEMS = [
   { to: "/receipts", icon: Receipt, label: "Receipts", roles: ["ceo", "manager", "finance_staff", "cashier"] },
   { to: "/bulk-upload", icon: Upload, label: "Bulk Upload", roles: ["ceo", "manager", "finance_staff"] },
   { to: "/reports", icon: BarChart3, label: "Reports", roles: ["ceo", "manager", "finance_staff"] },
+  { to: "/routes", icon: MapPin, label: "Routes", roles: ["ceo", "manager"] },
+  { to: "/my-route", icon: Navigation, label: "My Route", roles: ["ceo", "manager", "finance_staff", "cashier", "collector"] },
   { to: "/audit", icon: History, label: "Audit Log", roles: ["ceo", "manager"] },
 ];
 

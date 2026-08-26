@@ -15,6 +15,7 @@ export const roleValidator = v.union(
   v.literal("finance_staff"),
   v.literal("cashier"),
   v.literal("manager"),
+  v.literal("collector"),
 );
 
 // ─── Enum values ────────────────────────────────────────────────────────────
@@ -166,6 +167,41 @@ const schema = defineSchema(
       .index("by_user", ["userId"])
       .index("by_timestamp", ["timestamp"])
       .index("by_action", ["action"]),
+
+    // Collector routes
+    collector_routes: defineTable({
+      routeName: v.string(),
+      area: v.string(), // e.g. "Manila East", "Quezon City North"
+      city: v.optional(v.string()),
+      province: v.optional(v.string()),
+      assignedCollector: v.optional(v.id("users")),
+      frequency: v.union(
+        v.literal("daily"),
+        v.literal("weekly"),
+        v.literal("monthly"),
+      ),
+      isActive: v.boolean(),
+      notes: v.optional(v.string()),
+      createdAt: v.number(),
+      createdBy: v.id("users"),
+    })
+      .index("by_collector", ["assignedCollector"])
+      .index("by_area", ["area"]),
+
+    // Route assignments — which clients are on which route
+    route_clients: defineTable({
+      routeId: v.id("collector_routes"),
+      clientId: v.id("clients"),
+      stopOrder: v.number(), // Order of stop in the route
+      estimatedTime: v.optional(v.string()), // e.g. "9:00 AM"
+      notes: v.optional(v.string()),
+      isCompleted: v.boolean(),
+      completedAt: v.optional(v.number()),
+      completedBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+    })
+      .index("by_route", ["routeId"])
+      .index("by_client", ["clientId"]),
 
     // Receipts
     receipts: defineTable({
