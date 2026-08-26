@@ -65,17 +65,9 @@ export default function ClientDetail() {
     startDate: "",
   });
 
-  if (!client) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-sm text-muted-foreground font-mono">Loading client...</p>
-      </div>
-    );
-  }
-
-  const fullName = client.middleName
+  const fullName = client?.middleName
     ? `${client.lastName}, ${client.firstName} ${client.middleName}`
-    : `${client.lastName}, ${client.firstName}`;
+    : client ? `${client.lastName}, ${client.firstName}` : "";
 
   const clientContracts = contracts || [];
   const clientPayments = payments || [];
@@ -152,6 +144,14 @@ export default function ClientDetail() {
       setDownloadingSOA(false);
     }
   }, [client, contracts, payments, clientId]);
+
+  if (!client) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-sm text-muted-foreground font-mono">Loading client...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
