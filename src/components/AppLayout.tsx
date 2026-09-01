@@ -180,7 +180,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-[10000] flex items-center justify-between border-b border-border bg-sidebar px-4 py-3">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-[99999] flex items-center justify-between border-b border-border bg-sidebar px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="h-7 w-7 rounded bg-terminal-green/10 flex items-center justify-center">
             <span className="text-terminal-green font-bold text-[10px] font-mono">LP</span>
@@ -204,67 +204,62 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Mobile slide-out menu — rendered at body level via portal-like fixed positioning */}
-      <div
-        className="md:hidden"
-        style={{ position: "fixed", inset: 0, zIndex: 9998, pointerEvents: mobileMenuOpen ? "auto" : "none" }}
-      >
-        {/* Backdrop */}
-        <div
-          className="absolute inset-0 bg-black/30 transition-opacity"
-          style={{ opacity: mobileMenuOpen ? 1 : 0 }}
-          onClick={() => setMobileMenuOpen(false)}
-        />
-        {/* Menu panel */}
-        <div
-          className="absolute top-[52px] left-0 right-0 bg-sidebar border-b border-border shadow-xl overflow-y-auto max-h-[calc(100vh-52px-56px)] transition-transform z-[10001]"
-          style={{ transform: mobileMenuOpen ? "translateY(0)" : "translateY(-10px)" }}
-        >
-          <nav className="py-2 px-2">
-            {visibleNav.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
-                  }`
-                }
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
-            <div className="border-t border-border mt-1 pt-1">
-              <div className="px-3 py-2">
-                <p className="text-xs font-medium text-foreground truncate">
-                  {user?.name || user?.email || "User"}
-                </p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                  {ROLE_LABELS[userRole] || userRole}
-                </p>
+      {/* Mobile slide-out menu — conditional render at root level */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-[99990]">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Menu panel */}
+          <div className="absolute top-[52px] left-0 right-0 bg-sidebar border-b border-border shadow-xl overflow-y-auto max-h-[calc(100vh-52px-56px)]">
+            <nav className="py-2 px-2">
+              {visibleNav.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+                    }`
+                  }
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+              <div className="border-t border-border mt-1 pt-1">
+                <div className="px-3 py-2">
+                  <p className="text-xs font-medium text-foreground truncate">
+                    {user?.name || user?.email || "User"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    {ROLE_LABELS[userRole] || userRole}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
+                >
+                  <Moon className="h-4 w-4" />
+                  <span>{darkMode ? "Light" : "Dark"} Mode</span>
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Sign out</span>
+                </button>
               </div>
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
-              >
-                <Moon className="h-4 w-4" />
-                <span>{darkMode ? "Light" : "Dark"} Mode</span>
-              </button>
-              <button
-                onClick={handleSignOut}
-                className="flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sign out</span>
-              </button>
-            </div>
-          </nav>
+            </nav>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
