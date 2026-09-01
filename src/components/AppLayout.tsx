@@ -180,7 +180,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between border-b border-border bg-sidebar px-4 py-3">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-[10000] flex items-center justify-between border-b border-border bg-sidebar px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="h-7 w-7 rounded bg-terminal-green/10 flex items-center justify-center">
             <span className="text-terminal-green font-bold text-[10px] font-mono">LP</span>
@@ -207,7 +207,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile slide-out menu — rendered at body level via portal-like fixed positioning */}
       <div
         className="md:hidden"
-        style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: mobileMenuOpen ? "auto" : "none" }}
+        style={{ position: "fixed", inset: 0, zIndex: 9998, pointerEvents: mobileMenuOpen ? "auto" : "none" }}
       >
         {/* Backdrop */}
         <div
@@ -217,7 +217,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         />
         {/* Menu panel */}
         <div
-          className="absolute top-[52px] left-0 right-0 bg-sidebar border-b border-border shadow-xl overflow-y-auto max-h-[calc(100vh-52px-56px)] transition-transform"
+          className="absolute top-[52px] left-0 right-0 bg-sidebar border-b border-border shadow-xl overflow-y-auto max-h-[calc(100vh-52px-56px)] transition-transform z-[10001]"
           style={{ transform: mobileMenuOpen ? "translateY(0)" : "translateY(-10px)" }}
         >
           <nav className="py-2 px-2">
