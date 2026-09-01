@@ -71,40 +71,81 @@ export const list = query({
  * Claim super_admin role. Can only be called once — if a super_admin already exists, it fails.
  * This is the one-time setup for the app owner.
  */
+/**
+ * Claim super admin role. 
+ * - First time: locks the email permanently and assigns role.
+ * - Same email re-login: re-assigns role (e.g. if accidentally removed).
+ * - Different email: permanently blocked.
+ */
 export const claimSuperAdmin = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    // Check if a super_admin already exists
-    const existingSuperAdmin = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("role"), "super_admin"))
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found.");
+
+    const userEmail = (user.email ?? "").toLowerCase().trim();
+    if (!userEmail) throw new Error("Your account must have an email to claim Super Admin.");
+
+    // Check if super admin email is already locked
+    const lockedSetting = await ctx.db
+      .query("system_settings")
+      .withIndex("by_key", (q) => q.eq("key", "super_admin_email"))
       .first();
 
-    if (existingSuperAdmin) {
-      throw new Error(
-        "A super admin already exists. Only one super admin is allowed.",
-      );
+    if (lockedSetting) {
+      // A super admin email is already locked
+      if (lockedSetting.value === userEmail) {
+        // Same person re-logging in — re-assign role
+        const currentRole = user.role;
+        if (currentRole !== "super_admin") {
+          await ctx.db.patch(userId, { role: "super_admin" });
+          await ctx.db.insert("audit_log", {
+            action: "status_change",
+            entityType: "client",
+            entityId: userId,
+            userId: userId,
+            userName: user.name ?? user.email ?? "Unknown",
+            description: `Super Admin role restored for ${user.name ?? user.email} (email match)`,
+            oldValues: { role: currentRole },
+            newValues: { role: "super_admin" },
+            timestamp: Date.now(),
+          });
+        }
+        return { success: true, restored: currentRole !== "super_admin" };
+      } else {
+        // Different email — permanently blocked
+        throw new Error(
+          `This system already has a Super Admin (${lockedSetting.value}). Only that email can hold Super Admin.`
+        );
+      }
     }
 
-    // Assign super_admin to this user
+    // No super admin locked yet — this is the first claim
     await ctx.db.patch(userId, { role: "super_admin" });
 
-    // Log it
-    const user = await ctx.db.get(userId);
+    // Permanently lock the email
+    await ctx.db.insert("system_settings", {
+      key: "super_admin_email",
+      value: userEmail,
+      lockedAt: Date.now(),
+      lockedBy: userId,
+    });
+
+    // Audit log
     await ctx.db.insert("audit_log", {
       action: "create",
-      entityType: "client", // reuse as system event
+      entityType: "client",
       entityId: userId,
       userId: userId,
-      userName: user?.name ?? user?.email ?? "Unknown",
-      description: `Super Admin role claimed by ${user?.name ?? user?.email}`,
+      userName: user.name ?? user.email ?? "Unknown",
+      description: `Super Admin claimed by ${user.name ?? user.email} — email permanently locked`,
       timestamp: Date.now(),
     });
 
-    return { success: true };
+    return { success: true, locked: true };
   },
 });
 
@@ -159,11 +200,14 @@ export const setRole = mutation({
 export const hasSuperAdmin = query({
   args: {},
   handler: async (ctx) => {
-    const existing = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("role"), "super_admin"))
+    const lockedSetting = await ctx.db
+      .query("system_settings")
+      .withIndex("by_key", (q) => q.eq("key", "super_admin_email"))
       .first();
-    return { hasSuperAdmin: existing !== null };
+    return {
+      hasSuperAdmin: lockedSetting !== null,
+      superAdminEmail: lockedSetting?.value ?? null,
+    };
   },
 });
 

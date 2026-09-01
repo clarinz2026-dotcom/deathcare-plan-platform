@@ -376,6 +376,14 @@ const schema = defineSchema(
       .index("by_status", ["status"])
       .index("by_scheduledAt", ["scheduledAt"]),
 
+    // ─── System Settings (locked config) ───────────────────────────────
+    system_settings: defineTable({
+      key: v.string(), // e.g. "super_admin_email"
+      value: v.string(),
+      lockedAt: v.number(),
+      lockedBy: v.id("users"),
+    }).index("by_key", ["key"]),
+
     // ─── NEW: Branches ───────────────────────────────────────────────────
     branches: defineTable({
       name: v.string(),
