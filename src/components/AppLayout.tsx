@@ -25,39 +25,46 @@ import {
   Download,
   FileX,
   Moon,
+  UserCog,
+  Crown,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["ceo", "manager", "finance_staff", "cashier"] },
-  { to: "/clients", icon: Users, label: "Clients", roles: ["ceo", "manager", "finance_staff", "cashier"] },
-  { to: "/contracts", icon: FileText, label: "Contracts", roles: ["ceo", "manager", "finance_staff"] },
-  { to: "/payments", icon: CreditCard, label: "Payments", roles: ["ceo", "manager", "finance_staff", "cashier"] },
-  { to: "/receipts", icon: Receipt, label: "Receipts", roles: ["ceo", "manager", "finance_staff", "cashier"] },
-  { to: "/bulk-upload", icon: Upload, label: "Bulk Upload", roles: ["ceo", "manager", "finance_staff"] },
-  { to: "/reports", icon: BarChart3, label: "Reports", roles: ["ceo", "manager", "finance_staff"] },
-  { to: "/routes", icon: MapPin, label: "Routes", roles: ["ceo", "manager"] },
-  { to: "/my-route", icon: Navigation, label: "My Route", roles: ["ceo", "manager", "finance_staff", "cashier", "collector"] },
-  { to: "/audit", icon: History, label: "Audit Log", roles: ["ceo", "manager"] },
-  { to: "/commissions", icon: DollarSign, label: "Commissions", roles: ["ceo", "manager", "finance_staff"] },
-  { to: "/reconciliation", icon: Calculator, label: "Reconciliation", roles: ["ceo", "manager", "cashier"] },
-  { to: "/death-claims", icon: FileX, label: "Death Claims", roles: ["ceo", "manager", "finance_staff"] },
-  { to: "/aging-report", icon: AlertTriangle, label: "Aging Report", roles: ["ceo", "manager", "finance_staff"] },
-  { to: "/notifications", icon: Bell, label: "Notifications", roles: ["ceo", "manager", "finance_staff", "cashier", "collector"] },
-  { to: "/export", icon: Download, label: "Export Data", roles: ["ceo", "manager"] },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier"] },
+  { to: "/clients", icon: Users, label: "Clients", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier"] },
+  { to: "/contracts", icon: FileText, label: "Contracts", roles: ["super_admin", "ceo", "manager", "finance_staff"] },
+  { to: "/payments", icon: CreditCard, label: "Payments", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier"] },
+  { to: "/receipts", icon: Receipt, label: "Receipts", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier"] },
+  { to: "/bulk-upload", icon: Upload, label: "Bulk Upload", roles: ["super_admin", "ceo", "manager", "finance_staff"] },
+  { to: "/reports", icon: BarChart3, label: "Reports", roles: ["super_admin", "ceo", "manager", "finance_staff"] },
+  { to: "/routes", icon: MapPin, label: "Routes", roles: ["super_admin", "ceo", "manager"] },
+  { to: "/my-route", icon: Navigation, label: "My Route", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier", "collector"] },
+  { to: "/audit", icon: History, label: "Audit Log", roles: ["super_admin", "ceo", "manager"] },
+  { to: "/commissions", icon: DollarSign, label: "Commissions", roles: ["super_admin", "ceo", "manager", "finance_staff"] },
+  { to: "/reconciliation", icon: Calculator, label: "Reconciliation", roles: ["super_admin", "ceo", "manager", "cashier"] },
+  { to: "/death-claims", icon: FileX, label: "Death Claims", roles: ["super_admin", "ceo", "manager", "finance_staff"] },
+  { to: "/aging-report", icon: AlertTriangle, label: "Aging Report", roles: ["super_admin", "ceo", "manager", "finance_staff"] },
+  { to: "/notifications", icon: Bell, label: "Notifications", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier", "collector"] },
+  { to: "/export", icon: Download, label: "Export Data", roles: ["super_admin", "ceo", "manager"] },
+  { to: "/role-management", icon: UserCog, label: "Roles", roles: ["super_admin"] },
+  { to: "/super-admin-setup", icon: Crown, label: "Setup", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier", "collector"] },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
+  super_admin: "Super Admin",
   ceo: "CEO",
   finance_staff: "Finance Staff",
   cashier: "Cashier",
   manager: "Manager",
+  collector: "Collector",
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const roleData = useQuery(api.users.hasRole);
+  const superAdminData = useQuery(api.users.hasSuperAdmin);
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -86,8 +93,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     navigate("/");
   };
 
-  const userRole = roleData?.role ?? "ceo";
-  const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(userRole));
+  const userRole = roleData?.role ?? "super_admin";
+  const hasSuperAdmin = superAdminData?.hasSuperAdmin ?? false;
+
+  // Redirect to super admin setup if no super admin exists and user isn't one
+  const needsSetup = useMemo(() => {
+    if (superAdminData === undefined) return false; // still loading
+    if (hasSuperAdmin) return false; // already has one
+    if (userRole === "super_admin") return false; // already claimed
+    return true;
+  }, [superAdminData, hasSuperAdmin, userRole]);
+
+  // Redirect to setup if needed (but not already on setup page)
+  useEffect(() => {
+    if (needsSetup && location.pathname !== "/super-admin-setup") {
+      navigate("/super-admin-setup");
+    }
+  }, [needsSetup, location.pathname, navigate]);
+
+  const visibleNav = NAV_ITEMS.filter((item) => {
+    if (!item.roles.includes(userRole)) return false;
+    // Hide "Setup" once a super admin has been claimed
+    if (item.to === "/super-admin-setup" && hasSuperAdmin) return false;
+    return true;
+  });
 
   // Bottom nav items (always show first 5 for mobile)
   const bottomNavItems = visibleNav.slice(0, 5);

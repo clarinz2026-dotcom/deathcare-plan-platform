@@ -31,6 +31,8 @@ const DeathClaims = lazy(() => import("./pages/DeathClaims.tsx"));
 const AgingReport = lazy(() => import("./pages/AgingReport.tsx"));
 const Notifications = lazy(() => import("./pages/Notifications.tsx"));
 const ExportData = lazy(() => import("./pages/ExportData.tsx"));
+const RoleManagement = lazy(() => import("./pages/RoleManagement.tsx"));
+const SuperAdminSetup = lazy(() => import("./pages/SuperAdminSetup.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -293,6 +295,22 @@ createRoot(document.getElementById("root")!).render(
                 element={
                   <ProtectedRoute>
                     <ExportData />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/role-management"
+                element={
+                  <ProtectedRoute>
+                    <RoleManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/super-admin-setup"
+                element={
+                  <ProtectedRoute>
+                    <SuperAdminSetup />
                   </ProtectedRoute>
                 }
               />

@@ -4,13 +4,16 @@ import { v } from "convex/values";
 
 // ─── Roles ──────────────────────────────────────────────────────────────────
 export const ROLES = {
+  SUPER_ADMIN: "super_admin",
   CEO: "ceo",
   FINANCE_STAFF: "finance_staff",
   CASHIER: "cashier",
   MANAGER: "manager",
+  COLLECTOR: "collector",
 } as const;
 
 export const roleValidator = v.union(
+  v.literal("super_admin"),
   v.literal("ceo"),
   v.literal("finance_staff"),
   v.literal("cashier"),
