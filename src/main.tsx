@@ -25,6 +25,12 @@ const BulkUpload = lazy(() => import("./pages/BulkUpload.tsx"));
 const RoutesPage = lazy(() => import("./pages/Routes.tsx"));
 const RouteDetail = lazy(() => import("./pages/RouteDetail.tsx"));
 const MyRoute = lazy(() => import("./pages/MyRoute.tsx"));
+const Commissions = lazy(() => import("./pages/Commissions.tsx"));
+const Reconciliation = lazy(() => import("./pages/Reconciliation.tsx"));
+const DeathClaims = lazy(() => import("./pages/DeathClaims.tsx"));
+const AgingReport = lazy(() => import("./pages/AgingReport.tsx"));
+const Notifications = lazy(() => import("./pages/Notifications.tsx"));
+const ExportData = lazy(() => import("./pages/ExportData.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -239,6 +245,54 @@ createRoot(document.getElementById("root")!).render(
                 element={
                   <ProtectedRoute>
                     <MyRoute />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/commissions"
+                element={
+                  <ProtectedRoute>
+                    <Commissions />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reconciliation"
+                element={
+                  <ProtectedRoute>
+                    <Reconciliation />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/death-claims"
+                element={
+                  <ProtectedRoute>
+                    <DeathClaims />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/aging-report"
+                element={
+                  <ProtectedRoute>
+                    <AgingReport />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <ProtectedRoute>
+                    <Notifications />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/export"
+                element={
+                  <ProtectedRoute>
+                    <ExportData />
                   </ProtectedRoute>
                 }
               />

@@ -18,6 +18,13 @@ import {
   Upload,
   MapPin,
   Navigation,
+  DollarSign,
+  Calculator,
+  AlertTriangle,
+  Bell,
+  Download,
+  FileX,
+  Moon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +40,12 @@ const NAV_ITEMS = [
   { to: "/routes", icon: MapPin, label: "Routes", roles: ["ceo", "manager"] },
   { to: "/my-route", icon: Navigation, label: "My Route", roles: ["ceo", "manager", "finance_staff", "cashier", "collector"] },
   { to: "/audit", icon: History, label: "Audit Log", roles: ["ceo", "manager"] },
+  { to: "/commissions", icon: DollarSign, label: "Commissions", roles: ["ceo", "manager", "finance_staff"] },
+  { to: "/reconciliation", icon: Calculator, label: "Reconciliation", roles: ["ceo", "manager", "cashier"] },
+  { to: "/death-claims", icon: FileX, label: "Death Claims", roles: ["ceo", "manager", "finance_staff"] },
+  { to: "/aging-report", icon: AlertTriangle, label: "Aging Report", roles: ["ceo", "manager", "finance_staff"] },
+  { to: "/notifications", icon: Bell, label: "Notifications", roles: ["ceo", "manager", "finance_staff", "cashier", "collector"] },
+  { to: "/export", icon: Download, label: "Export Data", roles: ["ceo", "manager"] },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -49,11 +62,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("theme") === "dark" ||
+        (!localStorage.getItem("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    }
+    return false;
+  });
 
   // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Apply dark mode class
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -135,6 +161,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             size="sm"
+            className="w-full text-muted-foreground hover:text-foreground justify-start gap-2"
+            onClick={() => setDarkMode(!darkMode)}
+          >
+            <Moon className="h-4 w-4" />
+            {!collapsed && <span className="text-xs">{darkMode ? "Light" : "Dark"} Mode</span>}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             className={`w-full text-muted-foreground hover:text-foreground ${collapsed ? "px-0" : ""}`}
             onClick={handleSignOut}
           >
@@ -203,6 +238,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {ROLE_LABELS[userRole] || userRole}
                   </p>
                 </div>
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"
+                >
+                  <Moon className="h-4 w-4" />
+                  <span>{darkMode ? "Light" : "Dark"} Mode</span>
+                </button>
                 <button
                   onClick={handleSignOut}
                   className="flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground transition-colors"

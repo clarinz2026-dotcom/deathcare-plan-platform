@@ -1,0 +1,234 @@
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Download,
+  AlertTriangle,
+  Clock,
+  Calendar,
+  FileText,
+} from "lucide-react";
+import { ScrollableTable } from "@/components/ScrollableTable";
+
+function formatPHP(amount: number) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
+export default function AgingReport() {
+  const clientsWithStatus = useQuery(api.clients.listWithStatus);
+  const contracts = useQuery(api.contracts.list, {});
+
+  // Group by computed status
+  const groups = {
+    current: [] as any[],
+    delinquent_30: [] as any[],
+    delinquent_60: [] as any[],
+    delinquent_90: [] as any[],
+    lapsed: [] as any[],
+    fully_paid: [] as any[],
+    assigned_death_claim: [] as any[],
+  };
+
+  clientsWithStatus?.forEach((item) => {
+    const key = item.computedStatus as keyof typeof groups;
+    if (groups[key]) {
+      groups[key].push(item);
+    }
+  });
+
+  const totalOutstanding =
+    groups.current.reduce((s, i) => s + (i.contract ? i.contract.planAmount - i.contract.totalPaid : 0), 0) +
+    groups.delinquent_30.reduce((s, i) => s + (i.contract ? i.contract.planAmount - i.contract.totalPaid : 0), 0) +
+    groups.delinquent_60.reduce((s, i) => s + (i.contract ? i.contract.planAmount - i.contract.totalPaid : 0), 0) +
+    groups.delinquent_90.reduce((s, i) => s + (i.contract ? i.contract.planAmount - i.contract.totalPaid : 0), 0) +
+    groups.lapsed.reduce((s, i) => s + (i.contract ? i.contract.planAmount - i.contract.totalPaid : 0), 0);
+
+  const handleExportXLSX = async () => {
+    const XLSX = await import("xlsx");
+
+    const rows: any[][] = [
+      ["Overdue Aging Report"],
+      ["Generated", new Date().toLocaleString()],
+      [""],
+      ["Client", "Plan Type", "Contract #", "Plan Amount", "Total Paid", "Balance", "Status", "Days Since Payment"],
+    ];
+
+    const allGroups = [
+      { label: "Current", items: groups.current },
+      { label: "30 Days", items: groups.delinquent_30 },
+      { label: "60 Days", items: groups.delinquent_60 },
+      { label: "90 Days", items: groups.delinquent_90 },
+      { label: "Lapsed", items: groups.lapsed },
+    ];
+
+    for (const group of allGroups) {
+      rows.push([`--- ${group.label} (${group.items.length}) ---`]);
+      for (const item of group.items) {
+        const c = item.contract;
+        if (!c) continue;
+        rows.push([
+          `${item.client.firstName} ${item.client.lastName}`,
+          c.planType,
+          c.contractNumber,
+          c.planAmount,
+          c.totalPaid,
+          c.planAmount - c.totalPaid,
+          group.label,
+          item.daysSincePayment ?? "N/A",
+        ]);
+      }
+      rows.push([""]);
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, "Aging Report");
+    XLSX.writeFile(wb, `Aging_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded bg-terminal-amber/10 flex items-center justify-center">
+            <AlertTriangle className="h-4.5 w-4.5 text-terminal-amber" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Aging Report</h1>
+            <p className="text-xs text-muted-foreground font-mono">
+              Outstanding receivables by delinquency age
+            </p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1 font-mono text-xs"
+          onClick={handleExportXLSX}
+        >
+          <Download className="h-3.5 w-3.5" /> Export XLSX
+        </Button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          { label: "Current", count: groups.current.length, color: "text-terminal-green" },
+          { label: "30 Days", count: groups.delinquent_30.length, color: "text-terminal-amber" },
+          { label: "60 Days", count: groups.delinquent_60.length, color: "text-orange-500" },
+          { label: "90 Days", count: groups.delinquent_90.length, color: "text-terminal-red" },
+          { label: "Lapsed", count: groups.lapsed.length, color: "text-terminal-red" },
+        ].map((g) => (
+          <Card key={g.label}>
+            <CardContent className="p-3 text-center">
+              <p className={`text-2xl font-bold ${g.color}`}>{g.count}</p>
+              <p className="text-[10px] text-muted-foreground font-mono">{g.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Outstanding Total */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground font-mono">Total Outstanding Balance</p>
+              <p className="text-2xl font-bold text-terminal-red">{formatPHP(totalOutstanding)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-mono">Total Accounts</p>
+              <p className="text-2xl font-bold">
+                {groups.current.length + groups.delinquent_30.length + groups.delinquent_60.length + groups.delinquent_90.length + groups.lapsed.length}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Detailed Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-mono">Detailed Aging Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <ScrollableTable>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs font-mono">Client</TableHead>
+                  <TableHead className="text-xs font-mono">Contract #</TableHead>
+                  <TableHead className="text-xs font-mono">Plan Type</TableHead>
+                  <TableHead className="text-xs font-mono">Plan Amount</TableHead>
+                  <TableHead className="text-xs font-mono">Total Paid</TableHead>
+                  <TableHead className="text-xs font-mono">Balance</TableHead>
+                  <TableHead className="text-xs font-mono">Status</TableHead>
+                  <TableHead className="text-xs font-mono">Days</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[
+                  { label: "Current", items: groups.current, style: "text-terminal-green" },
+                  { label: "30 Days Late", items: groups.delinquent_30, style: "text-terminal-amber" },
+                  { label: "60 Days Late", items: groups.delinquent_60, style: "text-orange-500" },
+                  { label: "90 Days Late", items: groups.delinquent_90, style: "text-terminal-red" },
+                  { label: "Lapsed", items: groups.lapsed, style: "text-terminal-red" },
+                ].map((group) =>
+                  group.items.length > 0 ? (
+                    <>
+                      <TableRow key={`header-${group.label}`}>
+                        <TableCell colSpan={8} className={`text-xs font-bold font-mono ${group.style} bg-muted/30`}>
+                          {group.label} ({group.items.length})
+                        </TableCell>
+                      </TableRow>
+                      {group.items.map((item) => {
+                        const c = item.contract;
+                        if (!c) return null;
+                        const balance = c.planAmount - c.totalPaid;
+                        return (
+                          <TableRow key={item.client._id}>
+                            <TableCell className="text-xs font-mono">
+                              {item.client.firstName} {item.client.lastName}
+                            </TableCell>
+                            <TableCell className="text-xs font-mono">{c.contractNumber}</TableCell>
+                            <TableCell className="text-xs font-mono">{c.planType}</TableCell>
+                            <TableCell className="text-xs font-mono">{formatPHP(c.planAmount)}</TableCell>
+                            <TableCell className="text-xs font-mono">{formatPHP(c.totalPaid)}</TableCell>
+                            <TableCell className="text-xs font-bold font-mono text-terminal-red">{formatPHP(balance)}</TableCell>
+                            <TableCell>
+                              <Badge className={`text-[10px] font-mono ${group.style} bg-transparent border-current`}>
+                                {group.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs font-mono">
+                              {item.daysSincePayment ?? "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </>
+                  ) : null
+                )}
+              </TableBody>
+            </Table>
+          </ScrollableTable>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

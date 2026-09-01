@@ -223,6 +223,169 @@ const schema = defineSchema(
       .index("by_client", ["clientId"])
       .index("by_receiptNumber", ["receiptNumber"])
       .index("by_createdAt", ["createdAt"]),
+
+    // ─── NEW: Payment Schedules (due dates) ──────────────────────────────
+    payment_schedules: defineTable({
+      contractId: v.id("contracts"),
+      clientId: v.id("clients"),
+      dueDate: v.number(),
+      amount: v.number(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("paid"),
+        v.literal("overdue"),
+        v.literal("waived"),
+      ),
+      paidPaymentId: v.optional(v.id("payments")),
+      reminderSent: v.boolean(),
+      createdAt: v.number(),
+    })
+      .index("by_contract", ["contractId"])
+      .index("by_client", ["clientId"])
+      .index("by_dueDate", ["dueDate"])
+      .index("by_status", ["status"]),
+
+    // ─── NEW: Commissions ────────────────────────────────────────────────
+    commissions: defineTable({
+      agentId: v.id("users"),
+      contractId: v.id("contracts"),
+      clientId: v.id("clients"),
+      paymentId: v.id("payments"),
+      paymentAmount: v.number(),
+      commissionRate: v.number(), // percentage e.g. 5 = 5%
+      commissionAmount: v.number(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("approved"),
+        v.literal("paid"),
+        v.literal("rejected"),
+      ),
+      approvedBy: v.optional(v.id("users")),
+      approvedAt: v.optional(v.number()),
+      paidAt: v.optional(v.number()),
+      createdAt: v.number(),
+    })
+      .index("by_agent", ["agentId"])
+      .index("by_contract", ["contractId"])
+      .index("by_status", ["status"])
+      .index("by_createdAt", ["createdAt"]),
+
+    // ─── NEW: Agent commission settings ──────────────────────────────────
+    agent_commission_settings: defineTable({
+      agentId: v.id("users"),
+      commissionRate: v.number(), // percentage
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    })
+      .index("by_agent", ["agentId"]),
+
+    // ─── NEW: Daily Reconciliation ───────────────────────────────────────
+    daily_reconciliation: defineTable({
+      cashierId: v.id("users"),
+      reconciliationDate: v.number(),
+      totalCash: v.number(),
+      totalGCash: v.number(),
+      totalMaya: v.number(),
+      totalBankTransfer: v.number(),
+      totalCheck: v.number(),
+      totalRecorded: v.number(), // sum of all payment records
+      totalActual: v.number(), // what cashier physically counted
+      variance: v.number(), // actual - recorded
+      status: v.union(
+        v.literal("open"),
+        v.literal("closed"),
+        v.literal("reviewed"),
+      ),
+      notes: v.optional(v.string()),
+      reviewedBy: v.optional(v.id("users")),
+      reviewedAt: v.optional(v.number()),
+      createdAt: v.number(),
+    })
+      .index("by_cashier", ["cashierId"])
+      .index("by_date", ["reconciliationDate"])
+      .index("by_status", ["status"]),
+
+    // ─── NEW: Death Claims ───────────────────────────────────────────────
+    death_claims: defineTable({
+      contractId: v.id("contracts"),
+      clientId: v.id("clients"),
+      claimantName: v.string(),
+      claimantRelationship: v.string(),
+      claimantContact: v.string(),
+      claimantAddress: v.optional(v.string()),
+      dateOfDeath: v.number(),
+      deathCertificateNo: v.optional(v.string()),
+      causeOfDeath: v.optional(v.string()),
+      documentsRequired: v.array(v.string()), // list of required docs
+      documentsSubmitted: v.array(v.string()), // list of submitted docs
+      status: v.union(
+        v.literal("filed"),
+        v.literal("under_review"),
+        v.literal("documents_incomplete"),
+        v.literal("documents_complete"),
+        v.literal("approved"),
+        v.literal("rejected"),
+        v.literal("payout_pending"),
+        v.literal("payout_completed"),
+      ),
+      payoutAmount: v.number(),
+      payoutDate: v.optional(v.number()),
+      processedBy: v.optional(v.id("users")),
+      reviewedBy: v.optional(v.id("users")),
+      notes: v.optional(v.string()),
+      filedBy: v.id("users"),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_contract", ["contractId"])
+      .index("by_client", ["clientId"])
+      .index("by_status", ["status"]),
+
+    // ─── NEW: Notifications ──────────────────────────────────────────────
+    notifications: defineTable({
+      userId: v.id("users"),
+      clientId: v.optional(v.id("clients")),
+      type: v.union(
+        v.literal("payment_reminder"),
+        v.literal("delinquency_alert"),
+        v.literal("claim_update"),
+        v.literal("system"),
+      ),
+      title: v.string(),
+      message: v.string(),
+      channel: v.union(
+        v.literal("sms"),
+        v.literal("email"),
+        v.literal("in_app"),
+      ),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("sent"),
+        v.literal("failed"),
+        v.literal("read"),
+      ),
+      scheduledAt: v.number(),
+      sentAt: v.optional(v.number()),
+      readAt: v.optional(v.number()),
+      createdAt: v.number(),
+    })
+      .index("by_user", ["userId"])
+      .index("by_status", ["status"])
+      .index("by_scheduledAt", ["scheduledAt"]),
+
+    // ─── NEW: Branches ───────────────────────────────────────────────────
+    branches: defineTable({
+      name: v.string(),
+      code: v.string(),
+      address: v.string(),
+      city: v.string(),
+      province: v.string(),
+      contactNumber: v.optional(v.string()),
+      managerId: v.optional(v.id("users")),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    })
+      .index("by_code", ["code"]),
   },
   {
     schemaValidation: false,

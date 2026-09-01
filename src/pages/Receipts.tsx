@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { printThermalReceipt } from "@/components/ThermalReceipt";
 
 const CHANNEL_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -234,6 +235,27 @@ export default function Receipts() {
                   via {CHANNEL_LABELS[selectedReceipt.paymentChannel] || selectedReceipt.paymentChannel}
                 </p>
               </div>
+
+              {/* Thermal Print Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2 font-mono text-xs"
+                onClick={() =>
+                  printThermalReceipt({
+                    receiptNumber: selectedReceipt.receiptNumber,
+                    amount: selectedReceipt.amount,
+                    paymentChannel: selectedReceipt.paymentChannel,
+                    paymentDate: selectedReceipt.paymentDate,
+                    issuedTo: selectedReceipt.issuedTo,
+                    planType: selectedReceipt.planType,
+                    contractNumber: selectedReceipt.contractNumber,
+                    issuedByName: "Staff",
+                  })
+                }
+              >
+                <Printer className="h-3.5 w-3.5" /> Print Thermal Receipt
+              </Button>
 
               {/* Status */}
               <div className="text-center pt-2">
