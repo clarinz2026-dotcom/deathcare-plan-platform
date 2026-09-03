@@ -24,7 +24,7 @@ export function ThermalReceiptHTML(data: ThermalReceiptData): string {
   return `
     <div style="font-family: 'Courier New', monospace; font-size: 12px; width: 280px; padding: 8px; color: #000; background: #fff;">
       <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
-        <div style="font-weight: bold; font-size: 14px;">${data.companyName || "LIFEPLAN SERVICES"}</div>
+        <div style="font-weight: bold; font-size: 14px;">${data.companyName || "EVANGELIST FUNERAL SERVICES"}</div>
         <div style="font-size: 10px; margin-top: 2px;">Pre-Need Deathcare Plan</div>
       </div>
 

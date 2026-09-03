@@ -157,7 +157,7 @@ export function generateSOAHTML(data: SOAData): string {
             STATEMENT OF ACCOUNT
           </h1>
           <p style="font-family: 'Courier New', monospace; font-size: 11px; color: #6b6b60; margin-top: 4px;">
-            > stpeter.lifeplan — account.statement
+            > evangelist.funeralservices — account.statement
           </p>
         </div>
         <div style="text-align: right;">
@@ -226,7 +226,7 @@ export function generateSOAHTML(data: SOAData): string {
     <!-- Footer -->
     <div style="margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e5e0; font-size: 9px; color: #999; text-align: center; font-family: 'Courier New', monospace;">
       <p>This Statement of Account is computer-generated and does not require a signature.</p>
-      <p style="margin-top: 4px;">St. Peter Life Plan — Pre-Need Deathcare Plan Management</p>
+      <p style="margin-top: 4px;">Evangelist Funeral Services — Pre-Need Deathcare Plan Management</p>
       <p style="margin-top: 4px; color: #ccc;">Generated on ${data.generatedDate}</p>
     </div>
   </div>

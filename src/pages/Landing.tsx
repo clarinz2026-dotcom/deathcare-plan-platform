@@ -45,11 +45,11 @@ export default function Landing() {
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded bg-terminal-green/10 flex items-center justify-center">
               <span className="text-terminal-green font-bold text-sm font-mono">
-                LP
+                EF
               </span>
             </div>
             <div>
-              <span className="font-bold text-sm tracking-tight">LifePlan</span>
+              <span className="font-bold text-sm tracking-tight">Evangelist Funeral Services</span>
               <span className="text-[9px] text-muted-foreground ml-2 font-mono">
                 v1.0
               </span>
@@ -115,26 +115,26 @@ export default function Landing() {
                 <div className="h-2.5 w-2.5 rounded-full bg-border" />
               </div>
               <span className="text-[10px] text-muted-foreground font-mono ml-2">
-                lifeplan-cli
+                evangelist-cli
               </span>
             </div>
             <div className="p-4 font-mono text-xs leading-relaxed bg-card">
               <p>
-                <span className="text-terminal-green">$</span> lifeplan clients
+                <span className="text-terminal-green">$</span> evangelist clients
                 --status current
               </p>
               <p className="text-muted-foreground mt-1">
                 Found 248 active planholders
               </p>
               <p className="mt-3">
-                <span className="text-terminal-green">$</span> lifeplan payments
+                <span className="text-terminal-green">$</span> evangelist payments
                 --today --channel gcash
               </p>
               <p className="text-muted-foreground mt-1">
                 12 payments recorded today · ₱47,200 collected
               </p>
               <p className="mt-3">
-                <span className="text-terminal-green">$</span> lifeplan receipts
+                <span className="text-terminal-green">$</span> evangelist receipts
                 --latest
               </p>
               <p className="text-muted-foreground mt-1">
@@ -227,7 +227,7 @@ export default function Landing() {
       <footer className="border-t border-border">
         <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between">
           <p className="text-[10px] text-muted-foreground font-mono">
-            LifePlan v1.0 · Pre-Need Deathcare Management
+            Evangelist Funeral Services v1.0 · Pre-Need Deathcare Management
           </p>
           <p className="text-[10px] text-muted-foreground font-mono">
             Powered by{" "}

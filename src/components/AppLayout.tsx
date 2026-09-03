@@ -134,7 +134,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && (
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-sm tracking-tight text-foreground truncate">
-                LifePlan
+                Evangelist Funeral Services
               </span>
               <span className="text-[10px] text-muted-foreground tracking-wider uppercase">
                 v1.0
@@ -212,10 +212,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden fixed top-0 left-0 right-0 z-[99999] flex items-center justify-between border-b border-border bg-sidebar px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="h-7 w-7 rounded bg-terminal-green/10 flex items-center justify-center">
-            <span className="text-terminal-green font-bold text-[10px] font-mono">LP</span>
+            <span className="text-terminal-green font-bold text-[10px] font-mono">EF</span>
           </div>
           <div>
-            <span className="font-bold text-sm tracking-tight">LifePlan</span>
+            <span className="font-bold text-sm tracking-tight">Evangelist</span>
           </div>
         </div>
         <div className="flex items-center gap-2">

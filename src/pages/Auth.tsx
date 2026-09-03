@@ -118,7 +118,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <div className="flex justify-center">
                     <img
                       src={logo}
-                      alt="LifePlan"
+                      alt="Evangelist Funeral Services"
                       width={56}
                       height={56}
                       className="rounded-lg mb-3 mt-3 cursor-pointer"

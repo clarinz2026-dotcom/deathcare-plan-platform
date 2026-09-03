@@ -1,4 +1,4 @@
-# LifePlan
+# Evangelist Funeral Services
 
 **Pre-Need Deathcare Plan Management & Financial Collection Platform**
 
@@ -39,8 +39,8 @@ A complete web application for tracking client contracts, recording payments, is
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/lifeplan.git
-cd lifeplan
+git clone https://github.com/YOUR_USERNAME/evangelist-funeral-services.git
+cd evangelist-funeral-services
 bun install
 ```
 
@@ -71,7 +71,7 @@ The dev server runs at `http://localhost:5173`. Open it in your browser.
 ## Project Structure
 
 ```
-lifeplan/
+evangelist-funeral-services/
 ├── src/
 │   ├── convex/                    # Backend (Convex functions)
 │   │   ├── schema.ts              # Database schema & validators

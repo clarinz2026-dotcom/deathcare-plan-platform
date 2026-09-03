@@ -96,7 +96,7 @@ export default function ExportData() {
     const wsReceipts = XLSX.utils.aoa_to_sheet(receiptRows);
     XLSX.utils.book_append_sheet(wb, wsReceipts, "Receipts");
 
-    XLSX.writeFile(wb, `LifePlan_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `Evangelist_Funeral_Services_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const datasets = [

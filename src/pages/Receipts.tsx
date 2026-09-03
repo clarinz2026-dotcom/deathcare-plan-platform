@@ -168,9 +168,9 @@ export default function Receipts() {
             <div className="border border-border rounded-lg p-6 space-y-4 bg-white">
               {/* Receipt header */}
               <div className="text-center border-b border-border pb-4">
-                <h3 className="font-bold text-lg tracking-tight">LifePlan</h3>
+                <h3 className="font-bold text-lg tracking-tight">Evangelist Funeral Services</h3>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                  Pre-Need Deathcare Services
+                  Pre-Need Funeral &amp; Deathcare Services
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-1">
                   Official Receipt
@@ -251,6 +251,7 @@ export default function Receipts() {
                     planType: selectedReceipt.planType,
                     contractNumber: selectedReceipt.contractNumber,
                     issuedByName: "Staff",
+                    companyName: "Evangelist Funeral Services",
                   })
                 }
               >
