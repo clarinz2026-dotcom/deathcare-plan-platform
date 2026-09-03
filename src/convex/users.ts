@@ -45,7 +45,7 @@ export const hasRole = query({
 });
 
 /**
- * List all users (for role management). Only super_admin can use this.
+ * List all users (for role management). Super Admin and CEO can use this.
  */
 export const list = query({
   args: {},
@@ -53,7 +53,11 @@ export const list = query({
     const currentUserId = await getAuthUserId(ctx);
     if (!currentUserId) return [];
     const currentUserDoc = await ctx.db.get(currentUserId);
-    if (!currentUserDoc || currentUserDoc.role !== "super_admin") return [];
+    if (
+      !currentUserDoc ||
+      (currentUserDoc.role !== "super_admin" && currentUserDoc.role !== "ceo")
+    )
+      return [];
 
     const users = await ctx.db.query("users").collect();
     return users.map((u) => ({
@@ -150,7 +154,15 @@ export const claimSuperAdmin = mutation({
 });
 
 /**
- * Set a user's role. Only super_admin can do this.
+ * Set a user's role.
+ *
+ * Permission rules:
+ * - Super Admin: can assign any role EXCEPT "super_admin" (only one Super Admin
+ *   exists and it is locked to the owner's email). Cannot change their own role.
+ * - CEO: can assign Manager, Finance Staff, Cashier, and Collector roles.
+ *   CANNOT assign "ceo" or "super_admin", and cannot modify users who already
+ *   hold those roles. Cannot change their own role.
+ * - Everyone else: denied.
  */
 export const setRole = mutation({
   args: {
@@ -162,17 +174,40 @@ export const setRole = mutation({
     if (!currentUserId) throw new Error("Not authenticated");
 
     const currentUserDoc = await ctx.db.get(currentUserId);
-    if (!currentUserDoc || currentUserDoc.role !== "super_admin") {
-      throw new Error("Only the super admin can assign roles.");
+    const viewerRole = currentUserDoc?.role;
+    if (viewerRole !== "super_admin" && viewerRole !== "ceo") {
+      throw new Error("Only the Super Admin or CEO can assign roles.");
     }
 
     // Prevent changing your own role
     if (args.userId === currentUserId) {
-      throw new Error("Super admin cannot change their own role.");
+      throw new Error("You cannot change your own role.");
     }
 
     const targetUser = await ctx.db.get(args.userId);
     if (!targetUser) throw new Error("User not found.");
+
+    const targetRole = targetUser.role;
+
+    if (viewerRole === "super_admin") {
+      if (args.role === "super_admin") {
+        throw new Error(
+          "Super Admin is locked to the owner's email — it cannot be assigned to anyone else."
+        );
+      }
+    } else {
+      // Viewer is CEO
+      if (targetRole === "super_admin" || targetRole === "ceo") {
+        throw new Error(
+          "Only the Super Admin can manage the CEO or Super Admin account."
+        );
+      }
+      if (args.role === "super_admin" || args.role === "ceo") {
+        throw new Error(
+          "Only the Super Admin can assign the CEO or Super Admin role."
+        );
+      }
+    }
 
     const oldRole = targetUser.role;
     await ctx.db.patch(args.userId, { role: args.role });
@@ -183,8 +218,8 @@ export const setRole = mutation({
       entityType: "client", // reuse as system event
       entityId: args.userId,
       userId: currentUserId,
-      userName: currentUserDoc.name ?? currentUserDoc.email ?? "Unknown",
-      description: `Role changed for ${targetUser.name ?? targetUser.email}: ${oldRole ?? "none"} → ${args.role}`,
+      userName: (currentUserDoc?.name ?? currentUserDoc?.email) || "Unknown",
+      description: `Role changed for ${targetUser.name ?? targetUser.email}: ${oldRole ?? "none"} → ${args.role} (by ${viewerRole})`,
       oldValues: { role: oldRole },
       newValues: { role: args.role },
       timestamp: Date.now(),

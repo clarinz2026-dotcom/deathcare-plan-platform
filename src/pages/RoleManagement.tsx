@@ -37,13 +37,27 @@ export default function RoleManagement() {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [confirmRole, setConfirmRole] = useState<{ userId: string; name: string; role: string } | null>(null);
 
-  if (!roleData || roleData.role !== "super_admin") {
+  const viewerRole = roleData?.role;
+  const canManage = viewerRole === "super_admin" || viewerRole === "ceo";
+  const isViewerSuperAdmin = viewerRole === "super_admin";
+
+  // Super Admin can assign every role except "super_admin" (only one exists).
+  // CEO can only assign Manager / Finance Staff / Cashier / Collector.
+  const ASSIGNABLE_ROLES = ALL_ROLES.filter(
+    (r) => r.value !== "super_admin" && (isViewerSuperAdmin || r.value !== "ceo"),
+  );
+
+  // Roles the current viewer is not allowed to touch.
+  const isProtectedRole = (role: string | null | undefined) =>
+    role === "super_admin" || (!isViewerSuperAdmin && role === "ceo");
+
+  if (!roleData || !canManage) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Shield className="h-12 w-12 text-muted-foreground" />
         <h2 className="text-lg font-semibold">Access Denied</h2>
         <p className="text-sm text-muted-foreground">
-          Only the Super Admin can manage user roles.
+          Only the Super Admin or CEO can manage user roles.
         </p>
       </div>
     );
@@ -73,9 +87,28 @@ export default function RoleManagement() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Role Management</h1>
           <p className="text-xs text-muted-foreground">
-            Assign and manage user roles — only you (Super Admin) can do this.
+            {isViewerSuperAdmin
+              ? "Assign and manage all user roles."
+              : "Assign team roles (Manager, Finance Staff, Cashier, Collector). CEO and Super Admin roles are managed only by the Super Admin."}
           </p>
         </div>
+      </div>
+
+      {/* Permission note */}
+      <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
+        {isViewerSuperAdmin ? (
+          <p>
+            <span className="font-medium text-purple-600">Super Admin:</span> You
+            can assign any role except Super Admin — the Super Admin is permanently
+            locked to your email and cannot be given to another user.
+          </p>
+        ) : (
+          <p>
+            <span className="font-medium text-amber-600">CEO:</span> You can assign
+            Manager, Finance Staff, Cashier, and Collector roles. Creating another
+            CEO or a Super Admin is restricted to the Super Admin.
+          </p>
+        )}
       </div>
 
       {/* Role Legend */}
@@ -120,7 +153,7 @@ export default function RoleManagement() {
         {users?.map((u) => {
           const roleInfo = ALL_ROLES.find((r) => r.value === u.role);
           const isEditing = editingUserId === u._id;
-          const isSuperAdmin = u.role === "super_admin";
+          const protectedRole = isProtectedRole(u.role);
 
           return (
             <div
@@ -157,12 +190,12 @@ export default function RoleManagement() {
                 variant="outline"
                 className={`w-fit text-xs ${roleInfo?.color || "bg-gray-100 text-gray-800"}`}
               >
-                {isSuperAdmin && <Crown className="h-3 w-3 mr-1" />}
+                {u.role === "super_admin" && <Crown className="h-3 w-3 mr-1" />}
                 {roleInfo?.label || "No Role"}
               </Badge>
 
               {/* Actions */}
-              {!isSuperAdmin && (
+              {!protectedRole && (
                 <div className="relative">
                   <Button
                     variant="outline"
@@ -182,7 +215,7 @@ export default function RoleManagement() {
                   {/* Dropdown */}
                   {isEditing && (
                     <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-popover shadow-lg p-1">
-                      {ALL_ROLES.filter((r) => r.value !== "super_admin").map(
+                      {ASSIGNABLE_ROLES.map(
                         (r) => (
                           <button
                             key={r.value}
@@ -226,10 +259,20 @@ export default function RoleManagement() {
                 </div>
               )}
 
-              {isSuperAdmin && (
-                <div className="flex items-center gap-1.5 text-purple-600">
+              {protectedRole && (
+                <div
+                  className={`flex items-center gap-1.5 ${
+                    u.role === "super_admin" ? "text-purple-600" : "text-amber-600"
+                  }`}
+                >
                   <ShieldCheck className="h-4 w-4" />
-                  <span className="text-xs font-medium">Protected</span>
+                  <span className="text-xs font-medium">
+                    {u.role === "super_admin"
+                      ? "Protected · Super Admin only"
+                      : isViewerSuperAdmin
+                        ? "Protected"
+                        : "Protected · managed by Super Admin"}
+                  </span>
                 </div>
               )}
             </div>

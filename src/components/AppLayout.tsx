@@ -48,7 +48,7 @@ const NAV_ITEMS = [
   { to: "/aging-report", icon: AlertTriangle, label: "Aging Report", roles: ["super_admin", "ceo", "manager", "finance_staff"] },
   { to: "/notifications", icon: Bell, label: "Notifications", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier", "collector"] },
   { to: "/export", icon: Download, label: "Export Data", roles: ["super_admin", "ceo", "manager"] },
-  { to: "/role-management", icon: UserCog, label: "Roles", roles: ["super_admin"] },
+  { to: "/role-management", icon: UserCog, label: "Roles", roles: ["super_admin", "ceo"] },
   { to: "/super-admin-setup", icon: Crown, label: "Setup", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier", "collector"] },
 ];
 
