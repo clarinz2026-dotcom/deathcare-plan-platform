@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Compute delinquency status based on days since last payment.
@@ -147,6 +148,126 @@ export const update = mutation({
     if (Object.keys(cleanUpdates).length === 0) return;
 
     await ctx.db.patch(clientId, cleanUpdates);
+  },
+});
+
+/**
+ * Permanently delete multiple clients and everything attached to them:
+ * contracts, payments, receipts, payment schedules, commissions, death
+ * claims, route stops, and notifications. Audit logs are kept for history.
+ *
+ * Restricted to Super Admin, CEO, and Manager.
+ */
+export const bulkDelete = mutation({
+  args: {
+    clientIds: v.array(v.id("clients")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const user = await ctx.db.get(userId);
+    const viewerRole = user?.role;
+    if (
+      viewerRole !== "super_admin" &&
+      viewerRole !== "ceo" &&
+      viewerRole !== "manager"
+    ) {
+      throw new Error("Only the Super Admin, CEO, or Manager can delete clients.");
+    }
+
+    if (args.clientIds.length === 0) return { deleted: 0, names: [] as string[] };
+
+    const deletedNames: string[] = [];
+    let totalContracts = 0;
+    let totalPayments = 0;
+
+    for (const clientId of args.clientIds) {
+      const client = await ctx.db.get(clientId);
+      if (!client) continue;
+      deletedNames.push(`${client.lastName}, ${client.firstName}`);
+
+      // All contracts for this client → their payments, schedules, commissions
+      const contracts = await ctx.db
+        .query("contracts")
+        .withIndex("by_client", (q) => q.eq("clientId", clientId))
+        .collect();
+
+      const paymentIds: Id<"payments">[] = [];
+      for (const contract of contracts) {
+        const payments = await ctx.db
+          .query("payments")
+          .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
+          .collect();
+        paymentIds.push(...payments.map((p) => p._id));
+
+        const schedules = await ctx.db
+          .query("payment_schedules")
+          .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
+          .collect();
+        for (const s of schedules) await ctx.db.delete(s._id);
+
+        const commissions = await ctx.db
+          .query("commissions")
+          .withIndex("by_contract", (q) => q.eq("contractId", contract._id))
+          .collect();
+        for (const c of commissions) await ctx.db.delete(c._id);
+
+        await ctx.db.delete(contract._id);
+        totalContracts++;
+      }
+
+      // Receipts for this client (deletes all of the client's receipts)
+      const receipts = await ctx.db
+        .query("receipts")
+        .withIndex("by_client", (q) => q.eq("clientId", clientId))
+        .collect();
+      for (const r of receipts) await ctx.db.delete(r._id);
+
+      // Payments (any that weren't covered above are removed here)
+      for (const paymentId of paymentIds) {
+        await ctx.db.delete(paymentId);
+        totalPayments++;
+      }
+
+      // Death claims, route stops, notifications for this client
+      const claims = await ctx.db
+        .query("death_claims")
+        .withIndex("by_client", (q) => q.eq("clientId", clientId))
+        .collect();
+      for (const claim of claims) await ctx.db.delete(claim._id);
+
+      const routeStops = await ctx.db
+        .query("route_clients")
+        .withIndex("by_client", (q) => q.eq("clientId", clientId))
+        .collect();
+      for (const stop of routeStops) await ctx.db.delete(stop._id);
+
+      const notifications = await ctx.db.query("notifications").collect();
+      for (const n of notifications) {
+        if (String(n.clientId) === String(clientId)) await ctx.db.delete(n._id);
+      }
+
+      await ctx.db.delete(clientId);
+    }
+
+    // One audit entry summarizing the deletion
+    await ctx.db.insert("audit_log", {
+      action: "delete",
+      entityType: "client",
+      entityId: args.clientIds.map(String).join(","),
+      userId,
+      userName: user?.name ?? user?.email ?? "Unknown",
+      description: `Bulk deleted ${deletedNames.length} client(s) (${totalContracts} contracts, ${totalPayments} payments removed)`,
+      newValues: {
+        clients: deletedNames,
+        contractsRemoved: totalContracts,
+        paymentsRemoved: totalPayments,
+      },
+      timestamp: Date.now(),
+    });
+
+    return { deleted: deletedNames.length, names: deletedNames };
   },
 });
 

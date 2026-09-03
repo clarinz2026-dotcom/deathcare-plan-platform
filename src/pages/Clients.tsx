@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -22,8 +25,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, Users, ArrowRight } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Users,
+  ArrowRight,
+  Trash2,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
 import { ScrollableTable } from "@/components/ScrollableTable";
+import { toast } from "sonner";
 
 const STATUS_LABELS: Record<string, string> = {
   current: "Current",
@@ -73,6 +85,13 @@ export default function Clients() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // Multi-select / bulk delete state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const bulkDelete = useMutation(api.clients.bulkDelete);
+
   // Form state
   const [form, setForm] = useState({
     firstName: "",
@@ -93,6 +112,34 @@ export default function Clients() {
   });
 
   const createClient = useMutation(api.clients.create);
+
+  const toggleClient = (clientId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) {
+        next.delete(clientId);
+      } else {
+        next.add(clientId);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const result = await bulkDelete({
+        clientIds: [...selectedIds] as any,
+      });
+      toast.success(`Deleted ${result.deleted} client${result.deleted !== 1 ? "s" : ""}.`);
+      setSelectedIds(new Set());
+      setDeleteDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error?.message || "Could not delete the selected clients.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Filter clients by search and computed status
   const filteredClients = clientsWithStatus?.filter((item) => {
@@ -120,6 +167,28 @@ export default function Clients() {
     }
   }
   const clientCount = clientsWithStatus?.length || 0;
+
+  // Selection helpers against the currently visible (filtered) rows
+  const filteredClientIds = (filteredClients ?? []).map((item) => String(item.client._id));
+  const allVisibleSelected =
+    filteredClientIds.length > 0 && filteredClientIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = filteredClientIds.some((id) => selectedIds.has(id));
+
+  const toggleSelectVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        filteredClientIds.forEach((id) => next.delete(id));
+      } else {
+        filteredClientIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const selectedNames = (clientsWithStatus ?? [])
+    .filter((item) => selectedIds.has(String(item.client._id)))
+    .map((item) => `${item.client.lastName}, ${item.client.firstName}`);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -396,6 +465,34 @@ export default function Clients() {
         </div>
       </div>
 
+      {/* Bulk selection bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            {selectedIds.size} client{selectedIds.size !== 1 ? "s" : ""} selected
+          </div>
+          <div className="flex-1" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedIds(new Set())}
+            className="h-7 text-xs"
+          >
+            Clear
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-7 text-xs gap-1.5"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete ({selectedIds.size})
+          </Button>
+        </div>
+      )}
+
       {/* Client table */}
       <Card className="border-border/60 shadow-none">
         <CardContent className="p-0">
@@ -403,6 +500,15 @@ export default function Clients() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={
+                      allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false
+                    }
+                    onCheckedChange={toggleSelectVisible}
+                    aria-label="Select all visible clients"
+                  />
+                </TableHead>
                 <TableHead className="text-[10px] uppercase tracking-wider font-mono">
                   Client
                 </TableHead>
@@ -423,13 +529,13 @@ export default function Clients() {
             <TableBody>
               {!filteredClients ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm font-mono">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm font-mono">
                     Loading clients...
                   </TableCell>
                 </TableRow>
               ) : filteredClients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={6} className="text-center py-8">
                     <Users className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
                     <p className="text-sm text-muted-foreground font-mono">
                       {search || statusFilter !== "all"
@@ -440,12 +546,25 @@ export default function Clients() {
                 </TableRow>
               ) : (
                 filteredClients.map(({ client, contract, computedStatus, daysSincePayment }) => {
+                  const isSelected = selectedIds.has(String(client._id));
                   return (
                     <TableRow
                       key={client._id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className={`cursor-pointer hover:bg-muted/50 ${
+                        isSelected ? "bg-terminal-green/5" : ""
+                      }`}
                       onClick={() => navigate(`/clients/${client._id}`)}
                     >
+                      <TableCell
+                        className="w-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleClient(String(client._id))}
+                          aria-label={`Select ${client.lastName}, ${client.firstName}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <p className="font-medium text-sm">
                           {client.lastName}, {client.firstName}
@@ -507,6 +626,69 @@ export default function Clients() {
           </ScrollableTable>
         </CardContent>
       </Card>
+
+      {/* Bulk delete confirmation */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono">
+              <span className="text-terminal-amber">$</span> Delete {selectedIds.size} Client{selectedIds.size !== 1 ? "s" : ""}?
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <p>
+                This permanently deletes the selected client records and their
+                attached data:
+              </p>
+              <p className="font-mono text-xs">
+                contracts · payments · receipts · payment schedules ·
+                commissions · death claims · route stops
+              </p>
+              {selectedNames.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono mb-1">
+                    Selected
+                  </p>
+                  <div className="max-h-24 overflow-y-auto space-y-0.5 font-mono text-xs">
+                    {selectedNames.slice(0, 8).map((name) => (
+                      <div key={name}>• {name}</div>
+                    ))}
+                    {selectedNames.length > 8 && (
+                      <div className="text-muted-foreground">
+                        …and {selectedNames.length - 8} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              <p className="text-destructive font-medium pt-1">
+                This action cannot be undone. Audit logs are kept for history.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={isDeleting}
+              className="gap-2"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete {selectedIds.size} Client{selectedIds.size !== 1 ? "s" : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
