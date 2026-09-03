@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useNavigate } from "react-router";
@@ -33,6 +33,8 @@ import {
   Trash2,
   Loader2,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { ScrollableTable } from "@/components/ScrollableTable";
 import { toast } from "sonner";
@@ -78,6 +80,28 @@ function formatPHP(amount: number) {
   }).format(amount);
 }
 
+const PAGE_SIZE = 15;
+
+/** Build a compact page-number list: first, last, and pages around the current one. */
+function getPageItems(
+  current: number,
+  total: number,
+): Array<number | "gap"> {
+  const wanted = new Set<number>();
+  for (let p = 0; p < total; p++) {
+    if (p === 0 || p === total - 1 || Math.abs(p - current) <= 1) wanted.add(p);
+  }
+  const sorted = [...wanted].sort((a, b) => a - b);
+  const items: Array<number | "gap"> = [];
+  let prev: number | null = null;
+  for (const p of sorted) {
+    if (prev !== null && p - prev > 1) items.push("gap");
+    items.push(p);
+    prev = p;
+  }
+  return items;
+}
+
 export default function Clients() {
   const clientsWithStatus = useQuery(api.clients.listWithStatus, {});
   const navigate = useNavigate();
@@ -89,6 +113,14 @@ export default function Clients() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Pagination state (15 per page)
+  const [page, setPage] = useState(0);
+
+  // Go back to page 1 whenever the search or status tab changes
+  useEffect(() => {
+    setPage(0);
+  }, [search, statusFilter]);
 
   const bulkDelete = useMutation(api.clients.bulkDelete);
 
@@ -189,6 +221,14 @@ export default function Clients() {
   const selectedNames = (clientsWithStatus ?? [])
     .filter((item) => selectedIds.has(String(item.client._id)))
     .map((item) => `${item.client.lastName}, ${item.client.firstName}`);
+
+  // Pagination over the filtered list (15 per page)
+  const totalFiltered = filteredClients?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages - 1);
+  const pageStart = currentPage * PAGE_SIZE;
+  const pageClients = filteredClients?.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageItems = getPageItems(currentPage, totalPages);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
