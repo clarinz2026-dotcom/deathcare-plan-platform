@@ -5,8 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, FileText, CreditCard, Plus, Download } from "lucide-react";
+import {
+  ArrowLeft,
+  FileText,
+  CreditCard,
+  Plus,
+  Download,
+  Pencil,
+  Save,
+  Loader2,
+} from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { useState, useCallback } from "react";
 import {
   Dialog,
@@ -36,6 +46,15 @@ function formatPHP(amount: number) {
   }).format(amount);
 }
 
+/** Convert a timestamp to a yyyy-mm-dd string for <input type="date"> (local time). */
+function tsToDateInput(ts: number): string {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 import { generateSOAPDF } from "@/lib/generateSOA";
 
 export default function ClientDetail() {
@@ -54,6 +73,25 @@ export default function ClientDetail() {
     api.payments.list,
     clientId ? { clientId: clientId as any } : {}
   );
+
+  const updateClient = useMutation(api.clients.update);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState<{
+    firstName: string;
+    middleName: string;
+    lastName: string;
+    gender: "male" | "female" | "other";
+    dateOfBirth: string;
+    address: string;
+  }>({
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    gender: "male",
+    dateOfBirth: "",
+    address: "",
+  });
 
   const createContract = useMutation(api.contracts.create);
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
@@ -146,6 +184,44 @@ export default function ClientDetail() {
     }
   }, [client, contracts, payments, clientId]);
 
+  const openEditDialog = useCallback(() => {
+    if (!client) return;
+    setEditForm({
+      firstName: client.firstName,
+      middleName: client.middleName || "",
+      lastName: client.lastName,
+      gender: client.gender,
+      dateOfBirth: tsToDateInput(client.dateOfBirth),
+      address: client.address || "",
+    });
+    setEditDialogOpen(true);
+  }, [client]);
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientId || !client) return;
+    setSavingEdit(true);
+    try {
+      await updateClient({
+        clientId: clientId as any,
+        firstName: editForm.firstName.trim(),
+        middleName: editForm.middleName.trim() || undefined,
+        lastName: editForm.lastName.trim(),
+        gender: editForm.gender,
+        dateOfBirth: editForm.dateOfBirth
+          ? new Date(editForm.dateOfBirth).getTime()
+          : client.dateOfBirth,
+        address: editForm.address.trim(),
+      });
+      toast.success("Client updated successfully");
+      setEditDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to update client");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   if (!client) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -178,17 +254,134 @@ export default function ClientDetail() {
             </p>
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 font-mono"
-          onClick={handleDownloadSOA}
-          disabled={downloadingSOA}
-        >
-          <Download className="h-4 w-4" />
-          {downloadingSOA ? "Generating..." : "SOA"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 font-mono"
+            onClick={openEditDialog}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit Client
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 font-mono"
+            onClick={handleDownloadSOA}
+            disabled={downloadingSOA}
+          >
+            <Download className="h-4 w-4" />
+            {downloadingSOA ? "Generating..." : "SOA"}
+          </Button>
+        </div>
       </div>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto mx-2 sm:mx-0">
+          <DialogHeader>
+            <DialogTitle className="font-mono">
+              <span className="text-terminal-green">$</span> Edit Client
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground font-mono">
+              Update personal details for {fullName || "this client"}
+            </p>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 mt-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">First Name *</Label>
+                <Input
+                  value={editForm.firstName}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, firstName: e.target.value })
+                  }
+                  className="font-mono text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Middle Name</Label>
+                <Input
+                  value={editForm.middleName}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, middleName: e.target.value })
+                  }
+                  className="font-mono text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Last Name *</Label>
+                <Input
+                  value={editForm.lastName}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, lastName: e.target.value })
+                  }
+                  className="font-mono text-sm"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Date of Birth *</Label>
+                <Input
+                  type="date"
+                  value={editForm.dateOfBirth}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, dateOfBirth: e.target.value })
+                  }
+                  className="font-mono text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Gender *</Label>
+                <select
+                  value={editForm.gender}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      gender: e.target.value as typeof editForm.gender,
+                    })
+                  }
+                  className="font-mono text-sm bg-background border border-border rounded-md h-9 px-2 w-full"
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Address</Label>
+              <Input
+                value={editForm.address}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, address: e.target.value })
+                }
+                className="font-mono text-sm"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={savingEdit || !editForm.firstName.trim() || !editForm.lastName.trim()}
+              className="w-full gap-2"
+            >
+              {savingEdit ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save Changes
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Client info cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
