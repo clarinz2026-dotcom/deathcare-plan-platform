@@ -384,6 +384,19 @@ const schema = defineSchema(
       lockedBy: v.id("users"),
     }).index("by_key", ["key"]),
 
+    // ─── NEW: Plans (plan catalog) ────────────────────────────────────────
+    // The plan types a client can have (e.g. Isidore, Gabriel, Raphael,
+    // Michael). Bulk upload matches the spreadsheet "Plan Type" column
+    // against plan names (case-insensitive) and auto-creates contracts.
+    plans: defineTable({
+      name: v.string(),
+      price: v.number(), // total plan price (₱)
+      monthlyRate: v.optional(v.number()), // default monthly amortization (₱)
+      isActive: v.boolean(),
+      createdAt: v.number(),
+      createdBy: v.id("users"),
+    }).index("by_name", ["name"]),
+
     // ─── NEW: Branches ───────────────────────────────────────────────────
     branches: defineTable({
       name: v.string(),
