@@ -200,24 +200,6 @@ export default function Clients() {
   }
   const clientCount = clientsWithStatus?.length || 0;
 
-  // Selection helpers against the currently visible (filtered) rows
-  const filteredClientIds = (filteredClients ?? []).map((item) => String(item.client._id));
-  const allVisibleSelected =
-    filteredClientIds.length > 0 && filteredClientIds.every((id) => selectedIds.has(id));
-  const someVisibleSelected = filteredClientIds.some((id) => selectedIds.has(id));
-
-  const toggleSelectVisible = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        filteredClientIds.forEach((id) => next.delete(id));
-      } else {
-        filteredClientIds.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  };
-
   const selectedNames = (clientsWithStatus ?? [])
     .filter((item) => selectedIds.has(String(item.client._id)))
     .map((item) => `${item.client.lastName}, ${item.client.firstName}`);
@@ -229,6 +211,24 @@ export default function Clients() {
   const pageStart = currentPage * PAGE_SIZE;
   const pageClients = filteredClients?.slice(pageStart, pageStart + PAGE_SIZE);
   const pageItems = getPageItems(currentPage, totalPages);
+
+  // Selection helpers against the rows on the current page
+  const pageClientIds = (pageClients ?? []).map((item) => String(item.client._id));
+  const allVisibleSelected =
+    pageClientIds.length > 0 && pageClientIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = pageClientIds.some((id) => selectedIds.has(id));
+
+  const toggleSelectVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        pageClientIds.forEach((id) => next.delete(id));
+      } else {
+        pageClientIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -585,7 +585,7 @@ export default function Clients() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClients.map(({ client, contract, computedStatus, daysSincePayment }) => {
+                (pageClients ?? []).map(({ client, contract, computedStatus, daysSincePayment }) => {
                   const isSelected = selectedIds.has(String(client._id));
                   return (
                     <TableRow
@@ -664,6 +664,55 @@ export default function Clients() {
             </TableBody>
           </Table>
           </ScrollableTable>
+
+          {/* Pagination footer */}
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+              <p className="text-xs text-muted-foreground font-mono">
+                Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, totalFiltered)} of{" "}
+                {totalFiltered}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  disabled={currentPage === 0}
+                  onClick={() => setPage(currentPage - 1)}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                {pageItems.map((item, idx) =>
+                  item === "gap" ? (
+                    <span key={`gap-${idx}`} className="px-1 text-xs text-muted-foreground">
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={item}
+                      variant={item === currentPage ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 min-w-7 px-2 text-xs font-mono"
+                      onClick={() => setPage(item)}
+                    >
+                      {item + 1}
+                    </Button>
+                  ),
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  disabled={currentPage >= totalPages - 1}
+                  onClick={() => setPage(currentPage + 1)}
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
