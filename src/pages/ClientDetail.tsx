@@ -169,6 +169,11 @@ export default function ClientDetail() {
           <p className="text-xs text-muted-foreground font-mono">
             {client.contactNumber} · {client.city}, {client.province}
           </p>
+          {client.notes && (
+            <p className="text-[10px] text-muted-foreground/80 font-mono break-words">
+              {client.notes}
+            </p>
+          )}
         </div>
         <Button
           variant="outline"

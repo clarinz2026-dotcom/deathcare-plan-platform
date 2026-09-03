@@ -20,7 +20,15 @@ import * as XLSX from "xlsx";
 
 /**
  * Raw row from the user's CSV/XLSX.
- * Columns: no. / planholder name / Lpa no. / plan type / effectivity date / amount / Contact number / address
+ *
+ * Template columns (in order):
+ *   No. | Planholder Name | LPA NO | Plan Type | Effectivity Date |
+ *   Due Date | Installment | Amount | 30 | 60 | 90 |
+ *   Contact No. | Address
+ *
+ * This import creates CLIENT records only. Due Date, Installment (number of
+ * months the client has already paid), Amount, and the 30/60/90 columns are
+ * kept as reference info on the client.
  */
 interface UploadRow {
   no: string;
@@ -28,7 +36,12 @@ interface UploadRow {
   lpaNo: string;
   planType: string;
   effectivityDate: string;
+  dueDate: string;
+  installment: string;
   amount: string;
+  due30: string;
+  due60: string;
+  due90: string;
   contactNumber: string;
   address: string;
 }
@@ -39,112 +52,122 @@ interface ValidationResult {
 }
 
 /**
- * Flexible column name mapping so users can use various formats.
+ * Maps any spreadsheet header spelling to a canonical UploadRow field.
+ * Headers are compared without spaces/punctuation/case, so "LPA NO.",
+ * "Contact No.", "no.", etc. all work.
  */
-const COLUMN_ALIASES: Record<string, string> = {
+const HEADER_ALIASES: Record<string, keyof UploadRow> = {
   no: "no",
-  "no.": "no",
   number: "no",
   "#": "no",
-  "planholder name": "planholderName",
-  planholder_name: "planholderName",
   planholdername: "planholderName",
+  planholder: "planholderName",
+  clientname: "planholderName",
   name: "planholderName",
-  "client name": "planholderName",
-  client_name: "planholderName",
-  "lpa no.": "lpaNo",
-  "lpa no": "lpaNo",
-  lpa_no: "lpaNo",
+  fullname: "planholderName",
   lpano: "lpaNo",
   lpa: "lpaNo",
-  "contract number": "lpaNo",
-  contract_number: "lpaNo",
-  "plan type": "planType",
-  plan_type: "planType",
+  lpanumber: "lpaNo",
+  contractnumber: "lpaNo",
+  contractno: "lpaNo",
   plantype: "planType",
   plan: "planType",
-  "effectivity date": "effectivityDate",
-  effectivity_date: "effectivityDate",
+  type: "planType",
   effectivitydate: "effectivityDate",
-  "start date": "effectivityDate",
-  start_date: "effectivityDate",
   effectivity: "effectivityDate",
+  startdate: "effectivityDate",
+  duedate: "dueDate",
+  due: "dueDate",
+  paymentduedate: "dueDate",
+  installment: "installment",
+  installments: "installment",
+  monthspaid: "installment",
   amount: "amount",
-  "plan amount": "amount",
-  plan_amount: "amount",
   planamount: "amount",
   total: "amount",
-  "contact number": "contactNumber",
-  contact_number: "contactNumber",
+  "30": "due30",
+  "30days": "due30",
+  "60": "due60",
+  "60days": "due60",
+  "90": "due90",
+  "90days": "due90",
   contactnumber: "contactNumber",
+  contactno: "contactNumber",
+  contact: "contactNumber",
+  phonenumber: "contactNumber",
   phone: "contactNumber",
-  "phone number": "contactNumber",
   mobile: "contactNumber",
   address: "address",
-  "complete address": "address",
-  "full address": "address",
+  completeaddress: "address",
+  fulladdress: "address",
+  homeaddress: "address",
 };
 
-function normalizeColumnName(name: string): string {
-  const cleaned = name.trim().toLowerCase().replace(/[\s-]+/g, " ");
-  return COLUMN_ALIASES[cleaned] || cleaned.replace(/[\s.]+/g, "");
+/** "Contact No." / "LPA NO." / "no." → "contactno" / "lpano" / "no" */
+function compactHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[^a-z0-9#]/g, "");
+}
+
+/** Returns the canonical UploadRow field for a header, or "" if unknown. */
+function mapHeader(header: string): keyof UploadRow | "" {
+  return HEADER_ALIASES[compactHeader(header)] || "";
+}
+
+function str(value: unknown): string {
+  return value === undefined || value === null ? "" : String(value);
+}
+
+/** Build an UploadRow from an object keyed by canonical field names. */
+function toUploadRow(row: Record<string, unknown>): UploadRow {
+  return {
+    no: str(row.no),
+    planholderName: str(row.planholderName),
+    lpaNo: str(row.lpaNo),
+    planType: str(row.planType),
+    effectivityDate: str(row.effectivityDate),
+    dueDate: str(row.dueDate),
+    installment: str(row.installment),
+    amount: str(row.amount),
+    due30: str(row.due30),
+    due60: str(row.due60),
+    due90: str(row.due90),
+    contactNumber: str(row.contactNumber),
+    address: str(row.address),
+  };
 }
 
 function validateRow(row: UploadRow, rowNum: number): ValidationResult {
   const errors: string[] = [];
 
   if (!row.planholderName?.trim()) errors.push("Planholder name is required");
-  if (!row.lpaNo?.trim()) errors.push("LPA No. is required");
-  if (!row.planType?.trim()) errors.push("Plan type is required");
+  if (!row.contactNumber?.trim()) errors.push("Contact No. is required");
+  if (!row.address?.trim()) errors.push("Address is required");
 
-  if (!row.effectivityDate?.trim()) {
-    errors.push("Effectivity date is required");
-  } else {
+  if (row.effectivityDate?.trim()) {
     const date = new Date(row.effectivityDate);
     if (isNaN(date.getTime())) {
       errors.push(`Invalid effectivity date: ${row.effectivityDate}`);
     }
   }
 
-  const amount = parseFloat(String(row.amount));
-  if (isNaN(amount) || amount <= 0) {
-    errors.push(`Invalid amount: ${row.amount}`);
+  if (row.installment?.trim()) {
+    const months = parseFloat(row.installment);
+    if (isNaN(months) || months < 0) {
+      errors.push(`Installment (months paid) must be a number: ${row.installment}`);
+    }
   }
 
-  if (!row.contactNumber?.trim()) errors.push("Contact number is required");
-  if (!row.address?.trim()) errors.push("Address is required");
+  if (row.amount?.trim()) {
+    const amount = parseFloat(String(row.amount).replace(/,/g, ""));
+    if (isNaN(amount) || amount <= 0) {
+      errors.push(`Invalid amount: ${row.amount}`);
+    }
+  }
 
   return { row: rowNum, errors };
 }
 
-/**
- * Convert UploadRow to the ClientRow format expected by the backend.
- */
-function toClientRow(row: UploadRow) {
-  // Split planholder name into first/last
-  const nameParts = row.planholderName.trim().split(/\s+/);
-  const firstName = nameParts[0] || "Unknown";
-  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : firstName;
-
-  return {
-    firstName,
-    lastName,
-    middleName: undefined as string | undefined,
-    dateOfBirth: row.effectivityDate, // Use effectivity date as placeholder
-    gender: "other" as const,
-    contactNumber: row.contactNumber,
-    email: undefined as string | undefined,
-    address: row.address,
-    city: "",
-    province: "",
-    zipCode: "",
-    occupation: undefined as string | undefined,
-    beneficiaryName: "TBD",
-    beneficiaryRelationship: "TBD",
-    beneficiaryContact: undefined as string | undefined,
-    notes: `LPA No: ${row.lpaNo} | Plan: ${row.planType} | Amount: ₱${row.amount}`,
-  };
-}
+const VALID_FIELDS = Object.values(HEADER_ALIASES);
 
 export default function BulkUpload() {
   const bulkCreateClients = useMutation(api.bulk.bulkCreateClients);
@@ -177,22 +200,15 @@ export default function BulkUpload() {
 
         if (selectedFile.name.endsWith(".csv")) {
           const text = await selectedFile.text();
-          const result = Papa.parse<Record<string, string>>(text, {
+          const result = Papa.parse<Record<string, unknown>>(text, {
             header: true,
             skipEmptyLines: true,
-            transformHeader: (header: string) => normalizeColumnName(header),
+            transformHeader: mapHeader,
           });
 
-          data = result.data.map((row) => ({
-            no: row.no || "",
-            planholderName: row.planholderName || "",
-            lpaNo: row.lpaNo || "",
-            planType: row.planType || "",
-            effectivityDate: row.effectivityDate || "",
-            amount: String(row.amount || ""),
-            contactNumber: row.contactNumber || "",
-            address: row.address || "",
-          }));
+          data = result.data
+            .filter((row) => Object.keys(row).length > 0)
+            .map((row) => toUploadRow(row));
         } else if (
           selectedFile.name.endsWith(".xlsx") ||
           selectedFile.name.endsWith(".xls")
@@ -202,27 +218,21 @@ export default function BulkUpload() {
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
 
-          const jsonData = XLSX.utils.sheet_to_json<Record<string, string>>(
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(
             worksheet,
             { defval: "" },
           );
 
           data = jsonData.map((row) => {
-            const normalizedRow: Record<string, string> = {};
+            const normalizedRow: Record<string, unknown> = {};
+            for (const key of VALID_FIELDS) {
+              normalizedRow[key] = "";
+            }
             Object.entries(row).forEach(([key, value]) => {
-              normalizedRow[normalizeColumnName(key)] = String(value);
+              const field = mapHeader(key);
+              if (field) normalizedRow[field] = value;
             });
-
-            return {
-              no: normalizedRow.no || "",
-              planholderName: normalizedRow.planholderName || "",
-              lpaNo: normalizedRow.lpaNo || "",
-              planType: normalizedRow.planType || "",
-              effectivityDate: normalizedRow.effectivityDate || "",
-              amount: normalizedRow.amount || "",
-              contactNumber: normalizedRow.contactNumber || "",
-              address: normalizedRow.address || "",
-            };
+            return toUploadRow(normalizedRow);
           });
         }
 
@@ -244,7 +254,21 @@ export default function BulkUpload() {
         const result = validationResults[i];
         return result && result.errors.length === 0;
       })
-      .map((row) => toClientRow(row));
+      .map((row) => ({
+        no: row.no,
+        planholderName: row.planholderName,
+        lpaNo: row.lpaNo,
+        planType: row.planType,
+        effectivityDate: row.effectivityDate,
+        dueDate: row.dueDate,
+        installment: row.installment,
+        amount: row.amount,
+        due30: row.due30,
+        due60: row.due60,
+        due90: row.due90,
+        contactNumber: row.contactNumber,
+        address: row.address,
+      }));
 
     if (validRows.length === 0) return;
 
@@ -274,11 +298,62 @@ export default function BulkUpload() {
   const validCount = validationResults.filter((r) => r.errors.length === 0).length;
   const errorCount = validationResults.filter((r) => r.errors.length > 0).length;
 
+  const TEMPLATE_HEADERS = [
+    "No.",
+    "Planholder Name",
+    "LPA NO",
+    "Plan Type",
+    "Effectivity Date",
+    "Due Date",
+    "Installment",
+    "Amount",
+    "30",
+    "60",
+    "90",
+    "Contact No.",
+    "Address",
+  ];
+
+  const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+  const downloadSampleCSV = () => {
+    const headers = TEMPLATE_HEADERS;
+    const sampleRow = [
+      "1",
+      "Clarins Dela Cruz",
+      "LPA-2025-0123",
+      "Memorial Plan",
+      "01/15/2025",
+      "02/15/2025",
+      "3",
+      "150000",
+      "",
+      "",
+      "",
+      "09171234567",
+      "123 Rizal Avenue, Manila, Metro Manila",
+    ];
+    const csv =
+      "\uFEFF" +
+      [headers, sampleRow]
+        .map((cells) => cells.map(csvCell).join(","))
+        .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sample_planholders_upload.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Bulk Upload</h1>
+        <h1 className="text-2xl font-bold tracking-tight">
+          <span className="text-terminal-green">&gt;</span> Bulk Upload
+        </h1>
         <p className="text-xs text-muted-foreground font-mono">
           &gt; import.planholders.csv — Import multiple planholders at once
         </p>
@@ -294,8 +369,10 @@ export default function BulkUpload() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Upload a CSV or XLSX file with the following columns. Column names are
-            case-insensitive and support various formats.
+            Upload a CSV or XLSX file with the following columns. Column names
+            are case-insensitive and ignore spaces/punctuation. Only{" "}
+            <span className="font-medium text-foreground">client records</span>{" "}
+            are created on import.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -304,14 +381,24 @@ export default function BulkUpload() {
                 Required Columns
               </p>
               <ul className="text-xs text-muted-foreground space-y-1 font-mono">
-                <li>• no. — Row number</li>
                 <li>• planholder name — Full name</li>
-                <li>• Lpa no. — Contract/LPA number</li>
-                <li>• plan type — Plan type</li>
-                <li>• effectivity date — Start date</li>
-                <li>• amount — Plan amount (₱)</li>
-                <li>• Contact number — Phone number</li>
+                <li>• Contact No. — Phone number</li>
                 <li>• address — Complete address</li>
+              </ul>
+              <p className="text-xs font-medium mt-4 mb-2 text-muted-foreground">
+                Reference Columns (kept on the client for reference)
+              </p>
+              <ul className="text-xs text-muted-foreground space-y-1 font-mono">
+                <li>• no. — Row number</li>
+                <li>• LPA NO — LPA / contract number</li>
+                <li>• plan type — Plan type</li>
+                <li>• effectivity date — Plan start date</li>
+                <li>• due date — Payment due reference</li>
+                <li>
+                  • installment — No. of months already paid (e.g. 3)
+                </li>
+                <li>• amount — Plan amount (₱)</li>
+                <li>• 30 / 60 / 90 — Aging reference amounts</li>
               </ul>
             </div>
 
@@ -319,18 +406,21 @@ export default function BulkUpload() {
               <p className="text-xs font-medium mb-2 text-muted-foreground">
                 Example
               </p>
-              <div className="bg-muted/50 rounded-md p-3 font-mono text-[10px] text-muted-foreground space-y-1">
-                <div className="text-terminal-green">
-                  no., planholder name, Lpa no., plan type, effectivity date,
-                  amount, Contact number, address
+              <div className="bg-muted/50 rounded-md p-3 font-mono text-[10px] text-muted-foreground space-y-1 overflow-x-auto">
+                <div className="text-terminal-green whitespace-nowrap">
+                  No., Planholder Name, LPA NO, Plan Type, Effectivity Date,
+                  Due Date, Installment, Amount, 30, 60, 90, Contact No.,
+                  Address
                 </div>
-                <div>
-                  1, Juan Dela Cruz, LPA-2024-001, Memorial Plan, 01/15/2024,
-                  50000, 09171234567, 123 Rizal Ave Manila
+                <div className="whitespace-nowrap">
+                  1, Clarins Dela Cruz, LPA-2025-0123, Memorial Plan,
+                  01/15/2025, 02/15/2025, 3, 150000, , , , 09171234567, 123
+                  Rizal Avenue Manila
                 </div>
               </div>
               <p className="text-[10px] text-muted-foreground mt-2">
-                Date format: MM/DD/YYYY or YYYY-MM-DD
+                Date format: MM/DD/YYYY or YYYY-MM-DD. Amounts may include
+                commas (e.g. 150,000).
               </p>
             </div>
           </div>
@@ -340,36 +430,7 @@ export default function BulkUpload() {
               variant="outline"
               size="sm"
               className="gap-2 font-mono"
-              onClick={() => {
-                const headers = [
-                  "no.",
-                  "planholder name",
-                  "Lpa no.",
-                  "plan type",
-                  "effectivity date",
-                  "amount",
-                  "Contact number",
-                  "address",
-                ];
-                const sampleRow = [
-                  "1",
-                  "Juan Dela Cruz",
-                  "LPA-2024-001",
-                  "Memorial Plan",
-                  "01/15/2024",
-                  "50000",
-                  "09171234567",
-                  "123 Rizal Avenue, Manila, Metro Manila",
-                ];
-                const csv = [headers.join(","), sampleRow.join(",")].join("\n");
-                const blob = new Blob([csv], { type: "text/csv" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "sample_planholders_upload.csv";
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
+              onClick={downloadSampleCSV}
             >
               <Download className="h-4 w-4" />
               Download Sample CSV
@@ -457,7 +518,7 @@ export default function BulkUpload() {
               ) : (
                 <>
                   <Upload className="h-4 w-4" />
-                  Upload {validCount} Planholder{validCount !== 1 ? "s" : ""}
+                  Upload {validCount} Client{validCount !== 1 ? "s" : ""}
                 </>
               )}
             </Button>
@@ -470,49 +531,46 @@ export default function BulkUpload() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-sm min-w-[900px]">
+              <table className="w-full text-sm min-w-[1500px]">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      No.
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Status
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Planholder
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      LPA No.
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Plan Type
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Effectivity
-                    </th>
-                    <th className="text-right py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Amount
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Contact
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Address
-                    </th>
-                    <th className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
-                      Errors
-                    </th>
+                    {[
+                      "No.",
+                      "Status",
+                      "Planholder Name",
+                      "LPA NO",
+                      "Plan Type",
+                      "Effectivity Date",
+                      "Due Date",
+                      "Installment",
+                      "Amount",
+                      "30",
+                      "60",
+                      "90",
+                      "Contact No.",
+                      "Address",
+                      "Errors",
+                    ].map((header) => (
+                      <th
+                        key={header}
+                        className="text-left py-2 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-mono whitespace-nowrap"
+                      >
+                        {header}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {parsedData.slice(0, 100).map((row, i) => {
                     const result = validationResults[i];
                     const hasErrors = result && result.errors.length > 0;
+                    const amountNum = parseFloat(String(row.amount).replace(/,/g, ""));
                     return (
                       <tr
                         key={i}
-                        className={`border-b border-border/30 last:border-0 ${hasErrors ? "bg-red-50" : ""}`}
+                        className={`border-b border-border/30 last:border-0 ${
+                          hasErrors ? "bg-red-50" : ""
+                        }`}
                       >
                         <td className="py-2 px-3 font-mono text-xs text-muted-foreground">
                           {row.no || i + 1}
@@ -524,22 +582,39 @@ export default function BulkUpload() {
                             <CheckCircle className="h-4 w-4 text-terminal-green" />
                           )}
                         </td>
-                        <td className="py-2 px-3 text-xs">
+                        <td className="py-2 px-3 text-xs whitespace-nowrap">
                           {row.planholderName}
                         </td>
-                        <td className="py-2 px-3 font-mono text-xs">
-                          {row.lpaNo}
+                        <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
+                          {row.lpaNo || "—"}
                         </td>
-                        <td className="py-2 px-3 text-xs">{row.planType}</td>
-                        <td className="py-2 px-3 font-mono text-xs">
-                          {row.effectivityDate}
+                        <td className="py-2 px-3 text-xs whitespace-nowrap">
+                          {row.planType || "—"}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
+                          {row.effectivityDate || "—"}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
+                          {row.dueDate || "—"}
                         </td>
                         <td className="py-2 px-3 font-mono text-xs text-right">
-                          {row.amount
-                            ? `₱${Number(row.amount).toLocaleString()}`
-                            : "—"}
+                          {row.installment || "—"}
                         </td>
-                        <td className="py-2 px-3 font-mono text-xs">
+                        <td className="py-2 px-3 font-mono text-xs text-right whitespace-nowrap">
+                          {!isNaN(amountNum) && amountNum > 0
+                            ? `₱${amountNum.toLocaleString()}`
+                            : row.amount || "—"}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-xs text-right">
+                          {row.due30 || "—"}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-xs text-right">
+                          {row.due60 || "—"}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-xs text-right">
+                          {row.due90 || "—"}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
                           {row.contactNumber}
                         </td>
                         <td className="py-2 px-3 text-xs max-w-[200px] truncate">
@@ -583,10 +658,9 @@ export default function BulkUpload() {
                 <div>
                   <h3 className="text-lg font-bold">Upload Complete</h3>
                   <p className="text-sm text-muted-foreground">
-                    {uploadResult.success} planholder
+                    {uploadResult.success} client
                     {uploadResult.success !== 1 ? "s" : ""} created
-                    {uploadResult.failed > 0 &&
-                      `, ${uploadResult.failed} failed`}
+                    {uploadResult.failed > 0 && `, ${uploadResult.failed} failed`}
                   </p>
                 </div>
               </div>
