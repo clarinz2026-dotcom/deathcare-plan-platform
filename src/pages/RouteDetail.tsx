@@ -206,7 +206,9 @@ export default function RouteDetailPage() {
                   {/* Address */}
                   {stop.client && (
                     <p className="text-[10px] text-muted-foreground font-mono mt-1 ml-9">
-                      {stop.client.address}, {stop.client.city}, {stop.client.province}
+                      {[stop.client.address, stop.client.city, stop.client.province]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
                     </p>
                   )}
                 </CardContent>

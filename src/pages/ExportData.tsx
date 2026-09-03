@@ -34,8 +34,8 @@ export default function ExportData() {
       [""],
       ["First Name", "Last Name", "Middle Name", "Contact", "Email", "Address", "City", "Province", "Zip", "Beneficiary", "Relationship"],
       ...(clients?.map((c) => [
-        c.firstName, c.lastName, c.middleName || "", c.contactNumber,
-        c.email || "", c.address, c.city, c.province, c.zipCode,
+        c.firstName, c.lastName, c.middleName || "", c.contactNumber || "",
+        c.email || "", c.address || "", c.city, c.province, c.zipCode,
         c.beneficiaryName, c.beneficiaryRelationship,
       ]) || []),
     ];

@@ -294,7 +294,7 @@ function StopCard({
         {stop.client && (
           <p className="text-[10px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1">
             <MapPin className="h-2.5 w-2.5" />
-            {stop.client.address}, {stop.client.city}
+            {[stop.client.address, stop.client.city].filter(Boolean).join(", ") || "—"}
           </p>
         )}
 

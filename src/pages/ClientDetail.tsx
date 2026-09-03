@@ -124,8 +124,9 @@ export default function ClientDetail() {
 
       await generateSOAPDF({
         clientName,
-        clientAddress: `${client.address}, ${client.city}, ${client.province}`,
-        clientContact: client.contactNumber,
+        clientAddress:
+          [client.address, client.city, client.province].filter(Boolean).join(", ") || "—",
+        clientContact: client.contactNumber || "—",
         clientEmail: client.email || undefined,
         beneficiaryName: client.beneficiaryName,
         beneficiaryRelationship: client.beneficiaryRelationship,
@@ -167,7 +168,9 @@ export default function ClientDetail() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{fullName}</h1>
           <p className="text-xs text-muted-foreground font-mono">
-            {client.contactNumber} · {client.city}, {client.province}
+            {[client.contactNumber, [client.city, client.province].filter(Boolean).join(", ")]
+              .filter(Boolean)
+              .join(" · ") || "—"}
           </p>
           {client.notes && (
             <p className="text-[10px] text-muted-foreground/80 font-mono break-words">
@@ -230,7 +233,7 @@ export default function ClientDetail() {
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Phone</span>
-              <span className="font-mono text-xs">{client.contactNumber}</span>
+              <span className="font-mono text-xs">{client.contactNumber || "—"}</span>
             </div>
             {client.email && (
               <div className="flex justify-between">
@@ -241,7 +244,7 @@ export default function ClientDetail() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Address</span>
               <span className="text-xs text-right max-w-[200px]">
-                {client.address}
+                {client.address || "—"}
               </span>
             </div>
             <div className="flex justify-between">

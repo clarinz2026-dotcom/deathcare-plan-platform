@@ -56,12 +56,6 @@ export const bulkCreateClients = mutation({
         if (!planholderName) {
           throw new Error("Planholder name is required");
         }
-        if (!contactNumber) {
-          throw new Error("Contact number is required");
-        }
-        if (!address) {
-          throw new Error("Address is required");
-        }
 
         const { firstName, lastName, middleName } = splitFullName(planholderName);
 
@@ -73,9 +67,9 @@ export const bulkCreateClients = mutation({
           middleName,
           dateOfBirth: new Date("1990-01-01").getTime(),
           gender: "other",
-          contactNumber,
+          contactNumber: contactNumber || "",
           email: undefined,
-          address,
+          address: address || "",
           city: "",
           province: "",
           zipCode: "",
@@ -98,8 +92,8 @@ export const bulkCreateClients = mutation({
           newValues: {
             firstName,
             lastName,
-            contactNumber,
-            address,
+            contactNumber: contactNumber || "",
+            address: address || "",
           },
           timestamp: Date.now(),
         });

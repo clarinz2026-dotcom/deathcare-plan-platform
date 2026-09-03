@@ -457,9 +457,11 @@ export default function Clients() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <p className="text-xs font-mono">{client.contactNumber}</p>
+                        <p className="text-xs font-mono">
+                          {client.contactNumber || "—"}
+                        </p>
                         <p className="text-[11px] text-muted-foreground">
-                          {client.city}, {client.province}
+                          {[client.city, client.province].filter(Boolean).join(", ") || "—"}
                         </p>
                       </TableCell>
                       <TableCell>

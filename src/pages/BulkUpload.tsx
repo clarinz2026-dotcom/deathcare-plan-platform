@@ -140,8 +140,6 @@ function validateRow(row: UploadRow, rowNum: number): ValidationResult {
   const errors: string[] = [];
 
   if (!row.planholderName?.trim()) errors.push("Planholder name is required");
-  if (!row.contactNumber?.trim()) errors.push("Contact No. is required");
-  if (!row.address?.trim()) errors.push("Address is required");
 
   if (row.effectivityDate?.trim()) {
     const date = new Date(row.effectivityDate);
@@ -382,14 +380,14 @@ export default function BulkUpload() {
               </p>
               <ul className="text-xs text-muted-foreground space-y-1 font-mono">
                 <li>• planholder name — Full name</li>
-                <li>• Contact No. — Phone number</li>
-                <li>• address — Complete address</li>
               </ul>
               <p className="text-xs font-medium mt-4 mb-2 text-muted-foreground">
                 Reference Columns (kept on the client for reference)
               </p>
               <ul className="text-xs text-muted-foreground space-y-1 font-mono">
                 <li>• no. — Row number</li>
+                <li>• Contact No. — Phone number (optional)</li>
+                <li>• address — Complete address (optional)</li>
                 <li>• LPA NO — LPA / contract number</li>
                 <li>• plan type — Plan type</li>
                 <li>• effectivity date — Plan start date</li>
@@ -615,10 +613,10 @@ export default function BulkUpload() {
                           {row.due90 || "—"}
                         </td>
                         <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
-                          {row.contactNumber}
+                          {row.contactNumber || "—"}
                         </td>
                         <td className="py-2 px-3 text-xs max-w-[200px] truncate">
-                          {row.address}
+                          {row.address || "—"}
                         </td>
                         <td className="py-2 px-3">
                           {hasErrors && (

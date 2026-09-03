@@ -55,7 +55,7 @@ export const list = query({
         (c) =>
           c.lastName.toLowerCase().includes(search) ||
           c.firstName.toLowerCase().includes(search) ||
-          c.contactNumber.includes(search)
+          (c.contactNumber || "").toLowerCase().includes(search)
       );
     } else {
       clients = await ctx.db
