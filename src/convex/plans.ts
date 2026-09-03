@@ -7,13 +7,28 @@ import { mutation, query, MutationCtx } from "./_generated/server";
  * Plan catalog management.
  *
  * Plans are the plan types a client can hold (e.g. Isidore, Gabriel, Raphael,
- * Michael). The Bulk Upload page matches the spreadsheet "Plan Type" column
- * against these plan names (case-insensitive) and auto-creates a contract
- * using the plan's price.
+ * Michael). Each plan carries TWO monthly prices:
+ *   - price    — the current monthly amortization (e.g. ₱500 for Isidore)
+ *   - oldPrice — the legacy monthly rate for clients still on old pricing
+ *                (e.g. ₱250 for Isidore)
+ *
+ * The full plan price is the monthly rate x PLAN_TERM_MONTHS (60 months).
+ *
+ * The Bulk Upload page matches the spreadsheet "Plan Type" column against
+ * these plan names (case-insensitive) and auto-creates a contract using the
+ * monthly price chosen per client (old or current), plus backdated payments
+ * for the months already paid.
  *
  * Who can manage: Super Admin and CEO only. Everyone signed-in can read the
  * list (bulk upload needs it to preview contract creation).
  */
+
+/** Standard plan term used to derive the full plan price: monthly x 60 months. */
+export const PLAN_TERM_MONTHS = 60;
+
+/** Full plan price = monthly rate x 60-month term. */
+export const fullPlanPrice = (monthly: number): number =>
+  Math.round(monthly * PLAN_TERM_MONTHS);
 
 /** All plans, newest first. */
 export const list = query({
@@ -46,12 +61,21 @@ async function findByName(ctx: { db: MutationCtx["db"] }, name: string) {
   );
 }
 
+function validMonthly(value: number | undefined, label: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${label} must be greater than 0.`);
+  }
+  return Math.round(value);
+}
+
 /** Create a plan. */
 export const create = mutation({
   args: {
     name: v.string(),
-    price: v.number(),
-    monthlyRate: v.optional(v.number()),
+    price: v.number(), // current monthly price
+    oldPrice: v.optional(v.number()), // legacy monthly price
+    monthlyRate: v.optional(v.number()), // legacy alias (deprecated)
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -59,7 +83,11 @@ export const create = mutation({
 
     const name = args.name.trim();
     if (!name) throw new Error("Plan name is required.");
-    if (args.price <= 0) throw new Error("Plan price must be greater than 0.");
+
+    const price = validMonthly(args.price, "Current monthly price");
+    if (price === undefined) throw new Error("Current monthly price is required.");
+
+    const oldPrice = validMonthly(args.oldPrice, "Old monthly price");
 
     if (await findByName(ctx, name)) {
       throw new Error(`A plan named "${name}" already exists.`);
@@ -67,8 +95,12 @@ export const create = mutation({
 
     const planId = await ctx.db.insert("plans", {
       name,
-      price: args.price,
-      monthlyRate: args.monthlyRate && args.monthlyRate > 0 ? args.monthlyRate : undefined,
+      price,
+      oldPrice: oldPrice ?? undefined,
+      monthlyRate:
+        args.monthlyRate && args.monthlyRate > 0
+          ? Math.round(args.monthlyRate)
+          : undefined,
       isActive: args.isActive ?? true,
       createdAt: Date.now(),
       createdBy: userId,
@@ -81,8 +113,9 @@ export const create = mutation({
       entityId: planId,
       userId,
       userName: user?.name ?? user?.email ?? "Unknown",
-      description: `Plan "${name}" created (₱${args.price.toLocaleString()})`,
-      newValues: { name, price: args.price, monthlyRate: args.monthlyRate },
+      description: `Plan "${name}" created — current ₱${price.toLocaleString()}/mo (full ₱${fullPlanPrice(price).toLocaleString()})` +
+        (oldPrice ? `, old ₱${oldPrice.toLocaleString()}/mo (full ₱${fullPlanPrice(oldPrice).toLocaleString()})` : ""),
+      newValues: { name, price, oldPrice: oldPrice ?? undefined },
       timestamp: Date.now(),
     });
 
@@ -90,13 +123,14 @@ export const create = mutation({
   },
 });
 
-/** Update a plan (name, price, monthly rate, active flag). */
+/** Update a plan (name, monthly prices, active flag). */
 export const update = mutation({
   args: {
     planId: v.id("plans"),
     name: v.optional(v.string()),
     price: v.optional(v.number()),
-    monthlyRate: v.optional(v.number()),
+    oldPrice: v.optional(v.number()),
+    monthlyRate: v.optional(v.number()), // legacy alias (deprecated)
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -118,12 +152,18 @@ export const update = mutation({
     }
 
     if (args.price !== undefined) {
-      if (args.price <= 0) throw new Error("Plan price must be greater than 0.");
-      patch.price = args.price;
+      const price = validMonthly(args.price, "Current monthly price");
+      if (price === undefined) throw new Error("Current monthly price is required.");
+      patch.price = price;
+    }
+
+    if (args.oldPrice !== undefined) {
+      patch.oldPrice = validMonthly(args.oldPrice, "Old monthly price");
     }
 
     if (args.monthlyRate !== undefined) {
-      patch.monthlyRate = args.monthlyRate > 0 ? args.monthlyRate : undefined;
+      patch.monthlyRate =
+        args.monthlyRate > 0 ? Math.round(args.monthlyRate) : undefined;
     }
 
     if (args.isActive !== undefined) patch.isActive = args.isActive;
@@ -138,7 +178,7 @@ export const update = mutation({
       userId,
       userName: user?.name ?? user?.email ?? "Unknown",
       description: `Plan "${plan.name}" updated`,
-      oldValues: { name: plan.name, price: plan.price, monthlyRate: plan.monthlyRate, isActive: plan.isActive },
+      oldValues: { name: plan.name, price: plan.price, oldPrice: plan.oldPrice ?? undefined, isActive: plan.isActive },
       newValues: patch,
       timestamp: Date.now(),
     });
@@ -177,7 +217,7 @@ export const remove = mutation({
       userId,
       userName: user?.name ?? user?.email ?? "Unknown",
       description: `Plan "${plan.name}" removed`,
-      oldValues: { name: plan.name, price: plan.price },
+      oldValues: { name: plan.name, price: plan.price, oldPrice: plan.oldPrice ?? undefined },
       timestamp: Date.now(),
     });
 

@@ -124,6 +124,19 @@ const schema = defineSchema(
       .index("by_status", ["contractStatus"])
       .index("by_contractNumber", ["contractNumber"]),
 
+    // Plan catalog (e.g. Isidore, Gabriel, Raphael, Michael).
+    // price = current MONTHLY amortization; oldPrice = legacy monthly rate
+    // for clients still paying old prices. Full plan price = monthly x 60.
+    plans: defineTable({
+      name: v.string(),
+      price: v.number(), // current monthly price (₱)
+      oldPrice: v.optional(v.number()), // old monthly price (₱)
+      monthlyRate: v.optional(v.number()), // legacy alias (deprecated)
+      isActive: v.boolean(),
+      createdAt: v.number(),
+      createdBy: v.id("users"),
+    }).index("by_name", ["name"]),
+
     // Payments
     payments: defineTable({
       contractId: v.id("contracts"),
@@ -383,19 +396,6 @@ const schema = defineSchema(
       lockedAt: v.number(),
       lockedBy: v.id("users"),
     }).index("by_key", ["key"]),
-
-    // ─── NEW: Plans (plan catalog) ────────────────────────────────────────
-    // The plan types a client can have (e.g. Isidore, Gabriel, Raphael,
-    // Michael). Bulk upload matches the spreadsheet "Plan Type" column
-    // against plan names (case-insensitive) and auto-creates contracts.
-    plans: defineTable({
-      name: v.string(),
-      price: v.number(), // total plan price (₱)
-      monthlyRate: v.optional(v.number()), // default monthly amortization (₱)
-      isActive: v.boolean(),
-      createdAt: v.number(),
-      createdBy: v.id("users"),
-    }).index("by_name", ["name"]),
 
     // ─── NEW: Branches ───────────────────────────────────────────────────
     branches: defineTable({
