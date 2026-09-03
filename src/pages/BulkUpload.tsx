@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Download,
   Trash2,
+  FilePlus2,
 } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import Papa from "papaparse";
@@ -26,9 +27,9 @@ import * as XLSX from "xlsx";
  *   Due Date | Installment | Amount | 30 | 60 | 90 |
  *   Contact No. | Address
  *
- * This import creates CLIENT records only. Due Date, Installment (number of
- * months the client has already paid), Amount, and the 30/60/90 columns are
- * kept as reference info on the client.
+ * A client record is always created. If the Plan Type matches a plan on the
+ * Plans page, a contract is created automatically (plan price, effectivity
+ * date as start date) plus backdated payments for the months already paid.
  */
 interface UploadRow {
   no: string;
@@ -167,20 +168,58 @@ function validateRow(row: UploadRow, rowNum: number): ValidationResult {
 
 const VALID_FIELDS = Object.values(HEADER_ALIASES);
 
+const peso = (n: number) => `₱${n.toLocaleString()}`;
+
 export default function BulkUpload() {
   const bulkCreateClients = useMutation(api.bulk.bulkCreateClients);
+  const plans = useQuery(api.plans.list) ?? [];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<UploadRow[]>([]);
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+  const [monthlyRates, setMonthlyRates] = useState<Record<number, string>>({});
   const [isParsing, setIsParsing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     success: number;
     failed: number;
     errors: Array<{ row: number; error: string }>;
+    contractsCreated: number;
+    paymentsCreated: number;
   } | null>(null);
+
+  // Plan catalog lookup (case-insensitive), like the backend.
+  const plansByName = useCallback(() => {
+    const map = new Map<string, { name: string; price: number; monthlyRate?: number }>();
+    for (const p of plans) {
+      if (p.isActive === false) continue;
+      map.set(p.name.toLowerCase().trim(), p);
+    }
+    return map;
+  }, [plans]);
+
+  const getMatchedPlan = useCallback(
+    (row: UploadRow): { name: string; price: number; monthlyRate?: number } | null => {
+      const pt = (row.planType || "").trim().toLowerCase();
+      if (!pt) return null;
+      return plansByName().get(pt) ?? null;
+    },
+    [plansByName],
+  );
+
+  /** Suggested per-payment amount for a row (Amount ÷ months, plan rate, price ÷ months). */
+  const getSuggestedMonthly = useCallback(
+    (row: UploadRow, plan: { price: number; monthlyRate?: number }): number | null => {
+      const amount = parseFloat(String(row.amount).replace(/,/g, ""));
+      const months = parseInt(row.installment || "", 10) || 0;
+      if (!isNaN(amount) && amount > 0 && months > 0) return Math.round(amount / months);
+      if (plan.monthlyRate && plan.monthlyRate > 0) return plan.monthlyRate;
+      if (months > 0) return Math.round(plan.price / months);
+      return null;
+    },
+    [],
+  );
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,6 +229,7 @@ export default function BulkUpload() {
       setFile(selectedFile);
       setParsedData([]);
       setValidationResults([]);
+      setMonthlyRates({});
       setUploadResult(null);
       setIsParsing(true);
 
@@ -252,21 +292,34 @@ export default function BulkUpload() {
         const result = validationResults[i];
         return result && result.errors.length === 0;
       })
-      .map((row) => ({
-        no: row.no,
-        planholderName: row.planholderName,
-        lpaNo: row.lpaNo,
-        planType: row.planType,
-        effectivityDate: row.effectivityDate,
-        dueDate: row.dueDate,
-        installment: row.installment,
-        amount: row.amount,
-        due30: row.due30,
-        due60: row.due60,
-        due90: row.due90,
-        contactNumber: row.contactNumber,
-        address: row.address,
-      }));
+      .map((row, i) => {
+        // Per-row monthly rate: only relevant when the row will create a
+        // contract with backdated payments and has no Amount column.
+        const plan = getMatchedPlan(row);
+        const months = parseInt(row.installment || "", 10) || 0;
+        const amount = parseFloat(String(row.amount).replace(/,/g, ""));
+        let monthlyRate: number | undefined;
+        if (plan && months > 0 && (isNaN(amount) || amount <= 0)) {
+          const v = parseFloat(monthlyRates[i] || "");
+          if (!isNaN(v) && v > 0) monthlyRate = v;
+        }
+        return {
+          no: row.no,
+          planholderName: row.planholderName,
+          lpaNo: row.lpaNo,
+          planType: row.planType,
+          effectivityDate: row.effectivityDate,
+          dueDate: row.dueDate,
+          installment: row.installment,
+          amount: row.amount,
+          due30: row.due30,
+          due60: row.due60,
+          due90: row.due90,
+          contactNumber: row.contactNumber,
+          address: row.address,
+          monthlyRate,
+        };
+      });
 
     if (validRows.length === 0) return;
 
@@ -287,6 +340,7 @@ export default function BulkUpload() {
     setFile(null);
     setParsedData([]);
     setValidationResults([]);
+    setMonthlyRates({});
     setUploadResult(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -295,6 +349,7 @@ export default function BulkUpload() {
 
   const validCount = validationResults.filter((r) => r.errors.length === 0).length;
   const errorCount = validationResults.filter((r) => r.errors.length > 0).length;
+  const contractCount = parsedData.filter((row) => getMatchedPlan(row)).length;
 
   const TEMPLATE_HEADERS = [
     "No.",
@@ -320,11 +375,11 @@ export default function BulkUpload() {
       "1",
       "Clarins Dela Cruz",
       "LPA-2025-0123",
-      "Memorial Plan",
+      "Isidore",
       "01/15/2025",
       "02/15/2025",
       "3",
-      "150000",
+      "750",
       "",
       "",
       "",
@@ -353,7 +408,7 @@ export default function BulkUpload() {
           <span className="text-terminal-green">&gt;</span> Bulk Upload
         </h1>
         <p className="text-xs text-muted-foreground font-mono">
-          &gt; import.planholders.csv — Import multiple planholders at once
+          &gt; import.planholders.csv — Import planholders, auto-create contracts for matching plans
         </p>
       </div>
 
@@ -368,9 +423,12 @@ export default function BulkUpload() {
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Upload a CSV or XLSX file with the following columns. Column names
-            are case-insensitive and ignore spaces/punctuation. Only{" "}
-            <span className="font-medium text-foreground">client records</span>{" "}
-            are created on import.
+            are case-insensitive and ignore spaces/punctuation.{" "}
+            <span className="font-medium text-foreground">Client records</span>{" "}
+            are always created; if the <span className="font-medium text-foreground">Plan Type</span>{" "}
+            matches a plan on the <span className="font-medium text-foreground">Plans</span> page,
+            a <span className="font-medium text-foreground">contract</span> is created automatically
+            with backdated payments for the months already paid.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -382,20 +440,26 @@ export default function BulkUpload() {
                 <li>• planholder name — Full name</li>
               </ul>
               <p className="text-xs font-medium mt-4 mb-2 text-muted-foreground">
-                Reference Columns (kept on the client for reference)
+                Contract Columns (used when Plan Type matches a plan)
+              </p>
+              <ul className="text-xs text-muted-foreground space-y-1 font-mono">
+                <li>• plan type — Matches a plan on the Plans page</li>
+                <li>• LPA NO — Becomes the contract number</li>
+                <li>• effectivity date — Contract start date</li>
+                <li>• installment — Months already paid (backdated payments)</li>
+                <li>
+                  • amount — If filled: each backdated payment = Amount ÷ months.
+                  If blank: you pick the monthly rate in the preview
+                </li>
+              </ul>
+              <p className="text-xs font-medium mt-4 mb-2 text-muted-foreground">
+                Reference Columns (kept on the client)
               </p>
               <ul className="text-xs text-muted-foreground space-y-1 font-mono">
                 <li>• no. — Row number</li>
                 <li>• Contact No. — Phone number (optional)</li>
                 <li>• address — Complete address (optional)</li>
-                <li>• LPA NO — LPA / contract number</li>
-                <li>• plan type — Plan type</li>
-                <li>• effectivity date — Plan start date</li>
                 <li>• due date — Payment due reference</li>
-                <li>
-                  • installment — No. of months already paid (e.g. 3)
-                </li>
-                <li>• amount — Plan amount (₱)</li>
                 <li>• 30 / 60 / 90 — Aging reference amounts</li>
               </ul>
             </div>
@@ -411,14 +475,17 @@ export default function BulkUpload() {
                   Address
                 </div>
                 <div className="whitespace-nowrap">
-                  1, Clarins Dela Cruz, LPA-2025-0123, Memorial Plan,
-                  01/15/2025, 02/15/2025, 3, 150000, , , , 09171234567, 123
-                  Rizal Avenue Manila
+                  1, Clarins Dela Cruz, LPA-2025-0123, Isidore, 01/15/2025,
+                  02/15/2025, 3, 750, , , , 09171234567, 123 Rizal Avenue Manila
                 </div>
               </div>
               <p className="text-[10px] text-muted-foreground mt-2">
                 Date format: MM/DD/YYYY or YYYY-MM-DD. Amounts may include
                 commas (e.g. 150,000).
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                If a plan type doesn't match any plan on the Plans page, the
+                client is still imported without a contract.
               </p>
             </div>
           </div>
@@ -503,6 +570,12 @@ export default function BulkUpload() {
                 {errorCount} errors
               </Badge>
             )}
+            {contractCount > 0 && (
+              <Badge variant="outline" className="text-xs font-mono">
+                <FilePlus2 className="h-3 w-3 mr-1" />
+                {contractCount} contract{contractCount !== 1 ? "s" : ""} will be created
+              </Badge>
+            )}
             <Button
               onClick={handleUpload}
               disabled={validCount === 0 || isUploading}
@@ -516,7 +589,7 @@ export default function BulkUpload() {
               ) : (
                 <>
                   <Upload className="h-4 w-4" />
-                  Upload {validCount} Client{validCount !== 1 ? "s" : ""}
+                  Upload {validCount} record{validCount !== 1 ? "s" : ""}
                 </>
               )}
             </Button>
@@ -529,7 +602,7 @@ export default function BulkUpload() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-sm min-w-[1500px]">
+              <table className="w-full text-sm min-w-[1700px]">
                 <thead>
                   <tr className="border-b border-border">
                     {[
@@ -538,9 +611,11 @@ export default function BulkUpload() {
                       "Planholder Name",
                       "LPA NO",
                       "Plan Type",
+                      "Contract",
                       "Effectivity Date",
                       "Due Date",
                       "Installment",
+                      "Monthly (₱)",
                       "Amount",
                       "30",
                       "60",
@@ -563,6 +638,13 @@ export default function BulkUpload() {
                     const result = validationResults[i];
                     const hasErrors = result && result.errors.length > 0;
                     const amountNum = parseFloat(String(row.amount).replace(/,/g, ""));
+                    const plan = getMatchedPlan(row);
+                    const months = parseInt(row.installment || "", 10) || 0;
+                    const hasAmount = !isNaN(amountNum) && amountNum > 0;
+                    const suggested = plan ? getSuggestedMonthly(row, plan) : null;
+                    const needsMonthlyInput =
+                      !!plan && months > 0 && !hasAmount && suggested !== null;
+                    const monthlyDisplay = monthlyRates[i] ?? (suggested !== null ? String(suggested) : "");
                     return (
                       <tr
                         key={i}
@@ -589,6 +671,17 @@ export default function BulkUpload() {
                         <td className="py-2 px-3 text-xs whitespace-nowrap">
                           {row.planType || "—"}
                         </td>
+                        <td className="py-2 px-3">
+                          {plan ? (
+                            <Badge variant="outline" className="text-[10px] font-mono terminal-status-current whitespace-nowrap">
+                              {plan.name} · {peso(plan.price)}
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">
+                              client only
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
                           {row.effectivityDate || "—"}
                         </td>
@@ -598,9 +691,28 @@ export default function BulkUpload() {
                         <td className="py-2 px-3 font-mono text-xs text-right">
                           {row.installment || "—"}
                         </td>
+                        <td className="py-2 px-3">
+                          {needsMonthlyInput ? (
+                            <Input
+                              type="number"
+                              value={monthlyDisplay}
+                              onChange={(e) =>
+                                setMonthlyRates((prev) => ({ ...prev, [i]: e.target.value }))
+                              }
+                              placeholder="Monthly ₱"
+                              className="h-7 w-24 font-mono text-xs"
+                            />
+                          ) : plan && months > 0 ? (
+                            <span className="font-mono text-xs text-terminal-green whitespace-nowrap">
+                              {suggested !== null ? peso(suggested) : "—"}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground font-mono text-xs">—</span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 font-mono text-xs text-right whitespace-nowrap">
-                          {!isNaN(amountNum) && amountNum > 0
-                            ? `₱${amountNum.toLocaleString()}`
+                          {hasAmount
+                            ? peso(amountNum)
                             : row.amount || "—"}
                         </td>
                         <td className="py-2 px-3 font-mono text-xs text-right">
@@ -656,10 +768,17 @@ export default function BulkUpload() {
                 <div>
                   <h3 className="text-lg font-bold">Upload Complete</h3>
                   <p className="text-sm text-muted-foreground">
-                    {uploadResult.success} client
-                    {uploadResult.success !== 1 ? "s" : ""} created
+                    {uploadResult.success} client{uploadResult.success !== 1 ? "s" : ""} created
                     {uploadResult.failed > 0 && `, ${uploadResult.failed} failed`}
                   </p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <Badge variant="outline" className="text-[10px] font-mono terminal-status-current">
+                      {uploadResult.contractsCreated} contract{uploadResult.contractsCreated !== 1 ? "s" : ""} created
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {uploadResult.paymentsCreated} backdated payment{uploadResult.paymentsCreated !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
                 </div>
               </div>
 

@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
 import { mutation } from "./_generated/server";
 
 /**
@@ -77,7 +78,7 @@ export const bulkCreateClients = mutation({
 
     for (let i = 0; i < args.clients.length; i++) {
       const row = args.clients[i];
-      let clientId: string | null = null;
+      let clientId: Id<"clients"> | null = null;
       try {
         const planholderName = (row.planholderName || "").trim();
         const contactNumber = (row.contactNumber || "").trim();
@@ -199,7 +200,7 @@ async function createContractForRow(
     };
     plan: { name: string; price: number; monthlyRate?: number };
     clientId: string;
-    userId: string;
+    userId: Id<"users">;
     userName: string;
   },
 ) {

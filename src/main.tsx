@@ -22,6 +22,7 @@ const Receipts = lazy(() => import("./pages/Receipts.tsx"));
 const Reports = lazy(() => import("./pages/Reports.tsx"));
 const AuditLog = lazy(() => import("./pages/AuditLog.tsx"));
 const BulkUpload = lazy(() => import("./pages/BulkUpload.tsx"));
+const Plans = lazy(() => import("./pages/Plans.tsx"));
 const RoutesPage = lazy(() => import("./pages/Routes.tsx"));
 const RouteDetail = lazy(() => import("./pages/RouteDetail.tsx"));
 const MyRoute = lazy(() => import("./pages/MyRoute.tsx"));
@@ -224,6 +225,14 @@ createRoot(document.getElementById("root")!).render(
                 element={
                   <ProtectedRoute>
                     <BulkUpload />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/plans"
+                element={
+                  <ProtectedRoute>
+                    <Plans />
                   </ProtectedRoute>
                 }
               />
