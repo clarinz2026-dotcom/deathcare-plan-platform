@@ -27,9 +27,11 @@ import {
   Moon,
   UserCog,
   Crown,
+  Palette,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const NAV_ITEMS = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier"] },
@@ -49,6 +51,7 @@ const NAV_ITEMS = [
   { to: "/notifications", icon: Bell, label: "Notifications", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier", "collector"] },
   { to: "/export", icon: Download, label: "Export Data", roles: ["super_admin", "ceo", "manager"] },
   { to: "/role-management", icon: UserCog, label: "Roles", roles: ["super_admin", "ceo"] },
+  { to: "/branding", icon: Palette, label: "Branding", roles: ["super_admin", "ceo"] },
   { to: "/super-admin-setup", icon: Crown, label: "Setup", roles: ["super_admin", "ceo", "manager", "finance_staff", "cashier", "collector"] },
 ];
 
@@ -131,16 +134,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Header */}
         <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-          {!collapsed && (
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-sm tracking-tight text-foreground truncate">
-                Evangelist Funeral Services
-              </span>
-              <span className="text-[10px] text-muted-foreground tracking-wider uppercase">
-                v1.0
-              </span>
-            </div>
-          )}
+          <div
+            className={`flex items-center gap-2 min-w-0 ${
+              collapsed ? "flex-1 justify-center px-1" : ""
+            }`}
+          >
+            <BrandLogo className="h-7 w-7 shrink-0 rounded-md" />
+            {!collapsed && (
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-sm tracking-tight text-foreground truncate">
+                  Evangelist Funeral Services
+                </span>
+                <span className="text-[10px] text-muted-foreground tracking-wider uppercase">
+                  v1.0
+                </span>
+              </div>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -211,9 +221,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-[99999] flex items-center justify-between border-b border-border bg-sidebar px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded bg-terminal-green/10 flex items-center justify-center">
-            <span className="text-terminal-green font-bold text-[10px] font-mono">EF</span>
-          </div>
+          <BrandLogo className="h-7 w-7 rounded-md" />
           <div>
             <span className="font-bold text-sm tracking-tight">Evangelist</span>
           </div>

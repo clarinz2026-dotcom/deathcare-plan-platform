@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/BrandLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Shield,
@@ -43,11 +44,7 @@ export default function Landing() {
       <header className="border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded bg-terminal-green/10 flex items-center justify-center">
-              <span className="text-terminal-green font-bold text-sm font-mono">
-                EF
-              </span>
-            </div>
+            <BrandLogo className="h-8 w-8 rounded-md" />
             <div>
               <span className="font-bold text-sm tracking-tight">Evangelist Funeral Services</span>
               <span className="text-[9px] text-muted-foreground ml-2 font-mono">

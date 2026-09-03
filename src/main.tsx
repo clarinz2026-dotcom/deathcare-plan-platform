@@ -32,6 +32,7 @@ const AgingReport = lazy(() => import("./pages/AgingReport.tsx"));
 const Notifications = lazy(() => import("./pages/Notifications.tsx"));
 const ExportData = lazy(() => import("./pages/ExportData.tsx"));
 const RoleManagement = lazy(() => import("./pages/RoleManagement.tsx"));
+const Branding = lazy(() => import("./pages/Branding.tsx"));
 const SuperAdminSetup = lazy(() => import("./pages/SuperAdminSetup.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -303,6 +304,14 @@ createRoot(document.getElementById("root")!).render(
                 element={
                   <ProtectedRoute>
                     <RoleManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/branding"
+                element={
+                  <ProtectedRoute>
+                    <Branding />
                   </ProtectedRoute>
                 }
               />

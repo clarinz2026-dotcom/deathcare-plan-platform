@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/input-otp";
 
 import { useAuth } from "@/hooks/use-auth";
-import logo from "@/assets/logo.svg";
+import { BrandLogo } from "@/components/BrandLogo";
 import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -116,13 +116,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               <>
                 <CardHeader className="text-center">
                   <div className="flex justify-center">
-                    <img
-                      src={logo}
-                      alt="Evangelist Funeral Services"
-                      width={56}
-                      height={56}
-                      className="rounded-lg mb-3 mt-3 cursor-pointer"
+                    <BrandLogo
+                      className="h-14 w-14 rounded-lg mb-3 mt-3 cursor-pointer"
                       onClick={() => navigate("/")}
+                      title="Evangelist Funeral Services"
                     />
                   </div>
                   <CardTitle className="text-xl font-mono">
