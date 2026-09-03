@@ -38,7 +38,7 @@ const peso = (n: number) => `₱${n.toLocaleString()}`;
 export default function Plans() {
   const roleData = useQuery(api.users.hasRole);
   const plans = useQuery(api.plans.list) ?? [];
-  const contracts = useQuery(api.contracts.list) ?? [];
+  const contracts = useQuery(api.contracts.list, {}) ?? [];
 
   const createPlan = useMutation(api.plans.create);
   const updatePlan = useMutation(api.plans.update);
