@@ -27,13 +27,33 @@ import { toast } from "sonner";
 
 interface PlanFormState {
   name: string;
-  price: string;
-  monthlyRate: string;
+  price: string; // monthly payment in ₱ — full plan price = monthly × 60
 }
 
-const EMPTY_FORM: PlanFormState = { name: "", price: "", monthlyRate: "" };
+const EMPTY_FORM: PlanFormState = { name: "", price: "" };
 
 const peso = (n: number) => `₱${n.toLocaleString()}`;
+
+/** Full plan term used everywhere: monthly payment × 60 months. */
+const PLAN_TERM_MONTHS = 60;
+
+const fullPlanPrice = (monthly: number): number =>
+  Math.round(monthly * PLAN_TERM_MONTHS);
+
+/**
+ * Resolve a plan's actual MONTHLY payment (mirrors resolveMonthlyPrice in
+ * src/convex/plans.ts, keep in sync). Plans managed here store the monthly
+ * payment in `price`; legacy plans that stored the FULL price in `price`
+ * (monthly in `monthlyRate`) are recovered so existing rows stay correct.
+ */
+const planMonthly = (plan: { price: number; monthlyRate?: number }): number => {
+  if (plan.monthlyRate && plan.monthlyRate > 0) return plan.monthlyRate;
+  if (plan.price > 0 && plan.price % PLAN_TERM_MONTHS === 0) {
+    const legacyMonthly = plan.price / PLAN_TERM_MONTHS;
+    if (legacyMonthly >= 50 && legacyMonthly <= 5000) return legacyMonthly;
+  }
+  return plan.price;
+};
 
 export default function Plans() {
   const roleData = useQuery(api.users.hasRole);
@@ -45,7 +65,7 @@ export default function Plans() {
   const removePlan = useMutation(api.plans.remove);
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<{ _id: string; name: string; price: number; monthlyRate?: number } | null>(null);
+  const [editingPlan, setEditingPlan] = useState<{ _id: string; name: string; price: number } | null>(null);
   const [form, setForm] = useState<PlanFormState>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -66,52 +86,40 @@ export default function Plans() {
   };
 
   const openEdit = (plan: (typeof plans)[number]) => {
-    setEditingPlan({
-      _id: plan._id,
-      name: plan.name,
-      price: plan.price,
-      monthlyRate: plan.monthlyRate,
-    });
-    setForm({
-      name: plan.name,
-      price: String(plan.price),
-      monthlyRate: plan.monthlyRate ? String(plan.monthlyRate) : "",
-    });
+    const monthly = planMonthly(plan);
+    setEditingPlan({ _id: plan._id, name: plan.name, price: monthly });
+    setForm({ name: plan.name, price: String(monthly) });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
     const name = form.name.trim();
-    const price = parseFloat(form.price.replace(/,/g, ""));
-    const monthlyRate = form.monthlyRate.trim()
-      ? parseFloat(form.monthlyRate.replace(/,/g, ""))
-      : undefined;
+    const monthly = parseFloat(form.price.replace(/,/g, ""));
 
     if (!name) {
       toast.error("Plan name is required.");
       return;
     }
-    if (isNaN(price) || price <= 0) {
-      toast.error("Enter a valid total price greater than 0.");
-      return;
-    }
-    if (monthlyRate !== undefined && (isNaN(monthlyRate) || monthlyRate <= 0)) {
-      toast.error("Enter a valid monthly rate, or leave it blank.");
+    if (isNaN(monthly) || monthly <= 0) {
+      toast.error("Enter a valid monthly payment greater than 0.");
       return;
     }
 
     setIsSaving(true);
     try {
       if (editingPlan) {
+        // Keep any legacy old-price rate intact when editing pricing.
+        const original = plans.find((p) => String(p._id) === editingPlan._id);
         await updatePlan({
           planId: editingPlan._id as any,
           name,
-          price,
-          monthlyRate: monthlyRate ?? undefined,
+          price: monthly,
+          monthlyRate: monthly,
+          oldPrice: original?.oldPrice,
         });
         toast.success(`Plan "${name}" updated.`);
       } else {
-        await createPlan({ name, price, monthlyRate: monthlyRate ?? undefined });
+        await createPlan({ name, price: monthly, monthlyRate: monthly });
         toast.success(`Plan "${name}" created.`);
       }
       setDialogOpen(false);
@@ -163,9 +171,10 @@ export default function Plans() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">Plans</h1>
           <p className="text-xs text-muted-foreground">
-            Plan types (e.g. Isidore, Gabriel, Raphael, Michael). When a bulk
-            upload row has a matching plan type, a contract is created
-            automatically using the plan's price.
+            Plan types (e.g. Isidore, Gabriel, Raphael, Michael). Plans are
+            priced by their <span className="font-medium text-foreground">monthly payment</span> —
+            the full price is monthly × 60. When a bulk upload row has a
+            matching plan type, a contract is created automatically.
           </p>
         </div>
         <Button onClick={openCreate} className="gap-2">
@@ -208,11 +217,13 @@ export default function Plans() {
       <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
         <Info className="h-4 w-4 shrink-0 mt-0.5 text-terminal-green" />
         <p>
-          Plan names are matched <span className="font-medium text-foreground">case-insensitively</span>{" "}
-          against the "Plan Type" column during bulk upload. The monthly rate
-          is used as the default for backdated payments when a row has months
-          paid but no Amount — you can still override it per row in the upload
-          preview (e.g. 250 or 500 for old-price clients).
+          Bulk upload matches the "Plan Type" column against plan names{" "}
+          <span className="font-medium text-foreground">case-insensitively</span> and
+          auto-creates a contract billed at the row's{" "}
+          <span className="font-medium text-foreground">Amount ÷ months paid</span>, or at
+          this plan's monthly payment when the row has no Amount — you can
+          still override it per row in the upload preview (e.g. 250 vs 500 for
+          old-price clients).
         </p>
       </div>
 
@@ -236,7 +247,7 @@ export default function Plans() {
             <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="border-b border-border">
-                  {["Plan Name", "Total Price", "Monthly Rate", "Contracts", "Status", "Actions"].map((h) => (
+                  {["Plan Name", "Monthly Payment", "Full Price", "Contracts", "Status", "Actions"].map((h) => (
                     <th
                       key={h}
                       className="text-left py-2 px-4 text-[10px] uppercase tracking-wider text-muted-foreground font-mono"
@@ -256,10 +267,11 @@ export default function Plans() {
                         {plan.name}
                       </td>
                       <td className="py-2.5 px-4 font-mono text-xs">
-                        {peso(plan.price)}
+                        {peso(planMonthly(plan))}
+                        <span className="text-muted-foreground"> /mo</span>
                       </td>
-                      <td className="py-2.5 px-4 font-mono text-xs">
-                        {plan.monthlyRate ? peso(plan.monthlyRate) : "—"}
+                      <td className="py-2.5 px-4 font-mono text-xs text-muted-foreground">
+                        {peso(fullPlanPrice(planMonthly(plan)))}
                       </td>
                       <td className="py-2.5 px-4 font-mono text-xs">
                         {usage > 0 ? (
@@ -334,32 +346,29 @@ export default function Plans() {
                 className="font-mono text-sm mt-1"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Total Price (₱) *</Label>
-                <Input
-                  type="number"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  placeholder="e.g. 15000"
-                  className="font-mono text-sm mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Monthly Rate (₱) — optional</Label>
-                <Input
-                  type="number"
-                  value={form.monthlyRate}
-                  onChange={(e) => setForm({ ...form, monthlyRate: e.target.value })}
-                  placeholder="e.g. 250"
-                  className="font-mono text-sm mt-1"
-                />
-              </div>
+            <div>
+              <Label className="text-xs">Monthly Payment (₱) *</Label>
+              <Input
+                type="number"
+                value={form.price}
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
+                placeholder="e.g. 650"
+                className="font-mono text-sm mt-1"
+              />
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              The monthly rate is the default per-payment amount for backdated
-              payments when a bulk row has months paid but no Amount.
-            </p>
+            <div className="rounded-md bg-muted/50 border border-border px-3 py-2 font-mono text-xs flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">
+                full price (monthly × {PLAN_TERM_MONTHS})
+              </span>
+              <span className="font-bold text-terminal-green whitespace-nowrap">
+                {(() => {
+                  const monthly = parseFloat(form.price.replace(/,/g, ""));
+                  return !isNaN(monthly) && monthly > 0
+                    ? peso(fullPlanPrice(monthly))
+                    : "—";
+                })()}
+              </span>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSaving}>

@@ -170,6 +170,21 @@ const VALID_FIELDS = Object.values(HEADER_ALIASES);
 
 const peso = (n: number) => `₱${n.toLocaleString()}`;
 
+/**
+ * Resolve a plan's actual MONTHLY payment (mirrors resolveMonthlyPrice in
+ * src/convex/plans.ts, keep in sync). `price` is the monthly payment for
+ * plans managed from the Plans page; legacy plans that stored the FULL price
+ * in `price` (monthly in `monthlyRate`) are recovered here too.
+ */
+const planMonthly = (plan: { price: number; monthlyRate?: number }): number => {
+  if (plan.monthlyRate && plan.monthlyRate > 0) return plan.monthlyRate;
+  if (plan.price > 0 && plan.price % 60 === 0) {
+    const legacyMonthly = plan.price / 60;
+    if (legacyMonthly >= 50 && legacyMonthly <= 5000) return legacyMonthly;
+  }
+  return plan.price;
+};
+
 export default function BulkUpload() {
   const bulkCreateClients = useMutation(api.bulk.bulkCreateClients);
   const plans = useQuery(api.plans.list) ?? [];
@@ -208,15 +223,17 @@ export default function BulkUpload() {
     [plansByName],
   );
 
-  /** Suggested per-payment amount for a row (Amount ÷ months, plan rate, price ÷ months). */
+  /**
+   * Suggested per-payment amount for a row: Amount ÷ months paid when the
+   * sheet has an Amount, otherwise the plan's monthly payment (the upload
+   * preview lets you override it per row).
+   */
   const getSuggestedMonthly = useCallback(
     (row: UploadRow, plan: { price: number; monthlyRate?: number }): number | null => {
       const amount = parseFloat(String(row.amount).replace(/,/g, ""));
       const months = parseInt(row.installment || "", 10) || 0;
       if (!isNaN(amount) && amount > 0 && months > 0) return Math.round(amount / months);
-      if (plan.monthlyRate && plan.monthlyRate > 0) return plan.monthlyRate;
-      if (months > 0) return Math.round(plan.price / months);
-      return null;
+      return planMonthly(plan);
     },
     [],
   );
@@ -317,7 +334,9 @@ export default function BulkUpload() {
           due90: row.due90,
           contactNumber: row.contactNumber,
           address: row.address,
-          monthlyRate,
+          // The mutation arg is `selectedPrice` — the per-row monthly override
+          // for rows that have months paid but no Amount.
+          selectedPrice: monthlyRate,
         };
       });
 
@@ -674,7 +693,7 @@ export default function BulkUpload() {
                         <td className="py-2 px-3">
                           {plan ? (
                             <Badge variant="outline" className="text-[10px] font-mono terminal-status-current whitespace-nowrap">
-                              {plan.name} · {peso(plan.price)}
+                              {plan.name} · {peso(planMonthly(plan))}/mo
                             </Badge>
                           ) : (
                             <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">

@@ -2,7 +2,11 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { mutation, MutationCtx } from "./_generated/server";
-import { PLAN_TERM_MONTHS, fullPlanPrice } from "./plans";
+import {
+  PLAN_TERM_MONTHS,
+  fullPlanPrice,
+  resolveMonthlyPrice,
+} from "./plans";
 
 /**
  * Bulk create clients (and optionally contracts) from parsed CSV/XLSX data.
@@ -14,9 +18,9 @@ import { PLAN_TERM_MONTHS, fullPlanPrice } from "./plans";
  * A client record is always created. When the Plan Type matches an active
  * plan on the Plans page (case-insensitive), a CONTRACT is created too:
  *   - contract number  = LPA NO (if present) else auto-generated
- *   - start date       = Effectivity Date (falls back to today)
- *   - monthly rate     = selectedPrice (old or current price chosen in the
- *                        upload preview) — defaults to the plan's current price
+ *   - monthly rate     = Amount ÷ months paid when the sheet has an Amount,
+ *                        else the per-row price chosen in the upload preview,
+ *                        else the plan's monthly payment
  *   - plan amount      = monthly rate x 60 months (full plan price)
  *   - Installment      = months already paid → one backdated cash payment per
  *                        month, dated monthly from the effectivity date
@@ -122,8 +126,7 @@ export const bulkCreateClients = mutation({
           userId,
           userName,
           row,
-          planName: plan.name,
-          planPrice: plan.price,
+          plan,
           rowIndex: i,
         });
         results.contractsCreated++;
@@ -181,25 +184,22 @@ async function createContractWithBackdatedPayments(
       lpaNo?: string;
       effectivityDate?: string;
       installment?: string;
+      amount?: string;
       selectedPrice?: number;
     };
-    planName: string;
-    planPrice: number;
+    plan: { name: string; price: number; monthlyRate?: number };
     rowIndex: number;
   },
 ) {
-  const monthly =
-    opts.row.selectedPrice && opts.row.selectedPrice > 0
-      ? opts.row.selectedPrice
-      : opts.planPrice;
   const monthsPaid = parseInt(opts.row.installment || "", 10) || 0;
+  const monthly = resolveRowMonthly(opts.row, opts.plan);
   const startDate = parseDate(opts.row.effectivityDate) ?? Date.now();
   const contractNumber = (opts.row.lpaNo || "").trim() || generateContractNumber(opts.rowIndex);
 
   const contractId = await ctx.db.insert("contracts", {
     clientId: opts.clientId,
     contractNumber,
-    planType: opts.planName,
+    planType: opts.plan.name,
     planAmount: fullPlanPrice(monthly),
     monthlyAmortization: monthly,
     totalPaid: monthly * monthsPaid,
@@ -237,10 +237,10 @@ async function createContractWithBackdatedPayments(
     entityId: contractId,
     userId: opts.userId,
     userName: opts.userName,
-    description: `Contract ${contractNumber} auto-created for plan "${opts.planName}" (₱${monthly.toLocaleString()}/mo, ${monthsPaid} backdated month${monthsPaid !== 1 ? "s" : ""}) via bulk upload`,
+    description: `Contract ${contractNumber} auto-created for plan "${opts.plan.name}" (₱${monthly.toLocaleString()}/mo, ${monthsPaid} backdated month${monthsPaid !== 1 ? "s" : ""}) via bulk upload`,
     newValues: {
       contractNumber,
-      planType: opts.planName,
+      planType: opts.plan.name,
       monthlyRate: monthly,
       monthsPaid,
       startDate,
@@ -249,6 +249,29 @@ async function createContractWithBackdatedPayments(
   });
 
   return { contractId, paymentsCreated };
+}
+
+/**
+ * The monthly payment to bill a bulk-imported row when auto-creating its
+ * contract:
+ *  1. Spreadsheet Amount ÷ months paid (the client's actual rate)
+ *  2. The per-row override chosen in the upload preview
+ *  3. The plan's monthly payment
+ */
+function resolveRowMonthly(
+  row: { installment?: string; amount?: string; selectedPrice?: number },
+  plan: { price: number; monthlyRate?: number },
+): number {
+  const monthsPaid = parseInt(row.installment || "", 10) || 0;
+  const amount = parseFloat(String(row.amount ?? "").replace(/,/g, ""));
+  if (monthsPaid > 0 && !isNaN(amount) && amount > 0) {
+    const derived = Math.round(amount / monthsPaid);
+    if (derived > 0) return derived;
+  }
+  if (row.selectedPrice && row.selectedPrice > 0) {
+    return Math.round(row.selectedPrice);
+  }
+  return resolveMonthlyPrice(plan);
 }
 
 /** Find an active plan by name, case-insensitive. */

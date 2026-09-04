@@ -30,6 +30,30 @@ export const PLAN_TERM_MONTHS = 60;
 export const fullPlanPrice = (monthly: number): number =>
   Math.round(monthly * PLAN_TERM_MONTHS);
 
+/**
+ * Resolve the actual MONTHLY payment a plan bills per month.
+ *
+ * `price` is the canonical monthly amount for plans created/edited from the
+ * Plans page. Legacy plans created when the form asked for the TOTAL price
+ * stored the full amount in `price` (monthly in `monthlyRate`) — prefer
+ * `monthlyRate`, and otherwise recover the monthly from a full price that is
+ * an exact multiple of the 60-month term.
+ */
+export function resolveMonthlyPrice(plan: {
+  price: number;
+  monthlyRate?: number;
+}): number {
+  if (plan.monthlyRate && plan.monthlyRate > 0) {
+    return Math.round(plan.monthlyRate);
+  }
+  if (plan.price > 0 && plan.price % PLAN_TERM_MONTHS === 0) {
+    const legacyMonthly = plan.price / PLAN_TERM_MONTHS;
+    // Sanity band: a plausible monthly amortization (₱50 – ₱5,000).
+    if (legacyMonthly >= 50 && legacyMonthly <= 5000) return legacyMonthly;
+  }
+  return Math.round(plan.price) || 0;
+}
+
 /** All plans, newest first. */
 export const list = query({
   args: {},
